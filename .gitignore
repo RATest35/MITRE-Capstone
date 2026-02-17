@@ -1,0 +1,8 @@
+.env
+venv/
+__pycache__/
+wamulator_cli.egg-info/
+**.jpg
+prompt/
+wamulator_agent.egg-info/
+.wamulator/
