@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from typing import Literal
 
 
-MetricName = Literal["degree", "betweenness", "closeness", "eigenvector", "pagerank"]
+MetricName = Literal["degree", "betweenness", "closeness", "pagerank"]
 
 
 def compute_node_importance(graph: nx.Graph, metric_name: MetricName) -> dict[str, float]:
@@ -11,7 +11,6 @@ def compute_node_importance(graph: nx.Graph, metric_name: MetricName) -> dict[st
         "degree": nx.degree_centrality,
         "betweenness": nx.betweenness_centrality,
         "closeness": nx.closeness_centrality,
-        "eigenvector": nx.eigenvector_centrality,
         "pagerank": nx.pagerank,
     }
     if metric_name not in metric_functions:
