@@ -1,18 +1,18 @@
-## コーディングスタイル
-- 単一責任原則に則った実装をしてください。
-- docstringを書いてはいけません。
-- ネストを深くしてはいけません。
-- 全ての関数の引数と返り値には型アノテーションをつけなければなりません。
-- 関数、メソッドの数は少なく保ってください。
-- 条件分岐がなるべく少ない、流れが一貫していて読みやすいコードを書いてください。
-- コードはできるだけシンプルにかける書き方を採用してください。例えは配列内包表記[x for x in y]などを使用してスマートかつシンプルに書いてください。
-- 処理ブロックごとに適切に改行（empty line)を入れて処理のまとまりがわかりやすくなるようにしてください。
-- フォールバック処理はコードを不必要に複雑化するため書いてはいけません。
+## Coding Style
+- Follow single responsible principal when you write code, create files and directries. BUT, do NOT split code to too many functions.
+- Implement code according to the Single Responsibility Principle.
+- Write short docstrings.
+- Do not create deep nesting.
+- All function arguments and return values must have type annotations.
+- Keep the number of functions and methods low.
+- Write code with as few conditional branches as possible, keeping the flow consistent and easy to read.
+- Use styles that keep code as simple as possible. For example, use list comprehensions like `[x for x in y]` to write concise and clear code.
+- Insert appropriate empty lines between processing blocks so each logical unit is easy to identify.
+- Do not write fallback logic, as it adds unnecessary complexity to the code.
 
-## ログについて
-- ログは全て英語で記述してください。
+## Logging
+- All logs must be written in English.
 
-## その他
-- 日本語で回答してください
-
+## Other
+- Please respond in language same as given user prompt.
 
