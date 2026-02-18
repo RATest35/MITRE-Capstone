@@ -1,7 +1,3 @@
-# Node Importance Metrics for NetworkX Graph Visualization
-
-To quantify node importance in a graph, these centrality metrics are commonly used:
-
 1. Degree Centrality  
    Measures how many direct connections a node has.  
    Use this when you want a simple and fast "how connected is this node?" score.
@@ -22,7 +18,3 @@ To quantify node importance in a graph, these centrality metrics are commonly us
    A link-based importance score, especially useful for directed graphs.  
    Use this when direction and recursive influence matter.
 
-## Practical Recommendation
-
-For highlighting the top 20 important nodes in an urban-geography-style graph visualization, start with **Betweenness Centrality**.  
-It usually makes key transit/bridge nodes stand out clearly in the plot.
