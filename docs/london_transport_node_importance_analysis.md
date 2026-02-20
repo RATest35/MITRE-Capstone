@@ -115,18 +115,104 @@ Top 5 by each metric on the LCC:
 4. wiley-blackwell
 5. sage publishing
 
-## 7. Conclusion
-For this dataset, **PageRank is the most effective single metric** for node importance if the goal is to identify a limited number of high-impact nodes that most quickly degrade global connectivity.
+## 7. Extended Search Beyond the Original Four Metrics
+To test whether better alternatives exist, additional metrics were computed and evaluated with the same targeted-removal protocol.
 
-Recommended default in `examples/london-transportation/main.py`:
+### 7.1 Additional candidates
+- Eigenvector centrality
+- Harmonic centrality
+- Load centrality
+- Core number
+- Collective Influence (`CI`, radius `l=2` and `l=3`)
+- HITS hub score
+- HITS authority score
+- Objective-driven structural scores: `component_increase`, `lcc_drop_1step`, and `articulation_binary`
 
-- Use `metric_name = "pagerank"` as the primary importance metric.
+### 7.2 Technical normalization for fair comparison
+Some metrics are not implemented on multigraphs in NetworkX, so the comparison graph was normalized to:
 
-Contextual note:
+- Largest connected component of the undirected projection
+- Converted from `MultiGraph` to simple `Graph`
+- Resulting comparison graph: `964` nodes, `1203` edges
 
-- If the objective is large-scale progressive dismantling with many removals, Degree can be a strong secondary metric to compare.
+This affects absolute values slightly but keeps cross-metric ranking fair.
 
-## 8. Reproducibility Notes
-- Library used: NetworkX (plus SciPy for rank correlation in post-check)
-- Graph projection for comparison: undirected largest connected component
-- Main robustness score: AUC of LCC fraction under targeted removal
+### 7.3 Expanded metric ranking by robustness (AUC_LCC, lower is better)
+
+#### K = 10
+| Metric | AUC_LCC | LCC@10 |
+|---|---:|---:|
+| PageRank | **7.627** | 0.765 |
+| Degree | 7.646 | 0.765 |
+| Load | 7.675 | 0.769 |
+| Betweenness | 7.681 | 0.758 |
+| CI (l=2) | 7.732 | 0.767 |
+| CI (l=3) | 7.844 | 0.807 |
+
+#### K = 20
+| Metric | AUC_LCC | LCC@20 |
+|---|---:|---:|
+| PageRank | **14.111** | 0.585 |
+| Degree | 14.272 | 0.596 |
+| Load | 14.479 | 0.610 |
+| Betweenness | 14.488 | 0.610 |
+| CI (l=2) | 14.583 | 0.620 |
+| CI (l=3) | 14.733 | 0.592 |
+
+#### K = 50
+| Metric | AUC_LCC | LCC@50 |
+|---|---:|---:|
+| CI (l=3) | **22.718** | 0.163 |
+| Degree | 25.635 | 0.144 |
+| PageRank | 26.982 | 0.132 |
+| CI (l=2) | 26.992 | 0.189 |
+| Load | 28.199 | 0.230 |
+| Betweenness | 28.551 | 0.230 |
+
+#### K = 100
+| Metric | AUC_LCC | LCC@100 |
+|---|---:|---:|
+| Degree | **29.050** | 0.026 |
+| CI (l=3) | 29.655 | 0.078 |
+| PageRank | 30.038 | 0.034 |
+| CI (l=2) | 32.662 | 0.053 |
+| Load | 35.780 | 0.048 |
+| Betweenness | 35.864 | 0.048 |
+
+### 7.4 Aggregate view (across K = 10, 20, 50, 100)
+Using rank-sum over AUC across all K:
+
+1. Degree
+2. PageRank
+3. Collective Influence (l=3)
+4. Load
+5. Collective Influence (l=2)
+6. Betweenness
+
+Lower-performing metrics on this graph:
+- Closeness
+- Eigenvector
+- HITS (hub/authority)
+- Core number
+
+### 7.5 Interpretation
+- If the objective is **early-stage disruption** (small intervention budget, e.g., top 10-20 nodes), **PageRank** remains the best single choice.
+- If the objective is **mid-scale dismantling** (around top 50 removals), **Collective Influence (l=3)** outperforms the original four metrics.
+- For **large-scale removals** (around top 100), **Degree** is strongest, with CI(l=3) and PageRank close behind.
+- Structure-only one-step scores (`lcc_drop_1step`, `component_increase`) are informative diagnostics but underperform as standalone ranking metrics for sequential removal.
+
+## 8. Updated Recommendation
+There is no universal winner independent of objective. A practical policy is:
+
+- Default metric in `examples/london-transportation/main.py`: `pagerank`
+- Secondary metric for dismantling analysis: `collective_influence_l3`
+- Keep `degree` as a high-quality baseline for large-K stress tests
+
+If only one metric can be shipped for general use, keep **PageRank** due to its strongest early-impact behavior and stable overall performance.
+
+## 9. Reproducibility Notes
+- Library used: NetworkX (SciPy only for rank-correlation in prior section)
+- Graph source: `examples/london-transportation/Urban Geography.graphml`
+- Primary evaluation graph: undirected largest connected component
+- Extended search normalization: simple `Graph` projection to support all candidate metrics
+- Main robustness score: AUC of LCC fraction under targeted node removal
