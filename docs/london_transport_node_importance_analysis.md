@@ -1,5 +1,5 @@
-# (AL-generated) Codex Node Importance Analysis for `examples/london-transportation`
-`IMPORTANT`: This file is AI-generated and not checked by human yet.
+# (AI-generated) Codex Node Importance Analysis for `examples/london-transportation`
+`CAUTION`: This file is AI-generated and not checked by human yet.
 
 ## 1. Objective
 Identify the most effective metric to represent node importance for the graph used in:
