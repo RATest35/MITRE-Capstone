@@ -16,7 +16,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
 
 
-GRAPHML_PATH: Path = Path(__file__).with_name("ip_graph_39_nodes_243_edges_with_flow.graphml")
+GRAPHML_PATH: Path = Path(__file__).with_name("ip_graph_23511_nodes_edges_with_flow-2.graphml")
 PREDICTION_CSV_PATH: Path = Path(__file__).with_name("gnn_predictions.csv")
 RANDOM_SEEDS: tuple[int, ...] = (7, 21, 84, 168, 336)
 TRAIN_RATIO: float = 0.6
