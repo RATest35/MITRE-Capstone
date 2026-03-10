@@ -1,4 +1,8 @@
-"""Train a GNN to predict node flow loss from the IP graph dataset."""
+"""Train a GNN to predict node flow loss from an IP graph dataset.
+
+This module loads a GraphML graph, builds node-level features, trains a
+GraphSAGE-based regression model, and writes test-set predictions to CSV.
+"""
 
 from __future__ import annotations
 
@@ -31,16 +35,29 @@ DROPOUT: float = 0.1
 
 
 class FlowLossGNN(nn.Module):
-    """Predict log flow loss for each node."""
+    """GraphSAGE model for node-level flow-loss regression."""
 
     def __init__(self, input_channels: int, hidden_channels: int) -> None:
+        """Initialize the GNN layers.
+
+        Args:
+            input_channels: Number of input node-feature channels.
+            hidden_channels: Number of hidden channels used by GraphSAGE layers.
+        """
         super().__init__()
         self.conv1 = SAGEConv(input_channels, hidden_channels)
         self.conv2 = SAGEConv(hidden_channels, hidden_channels)
         self.head = nn.Linear(hidden_channels, 1)
 
     def forward(self, data: Data) -> Tensor:
-        """Run message passing and return node predictions."""
+        """Run message passing and return one prediction per node.
+
+        Args:
+            data: PyG graph data containing node features and edge indices.
+
+        Returns:
+            Tensor: Predicted log flow-loss values for all nodes.
+        """
         x = self.conv1(data.x, data.edge_index)
         x = F.relu(x)
         x = F.dropout(x, p=DROPOUT, training=self.training)
@@ -50,7 +67,15 @@ class FlowLossGNN(nn.Module):
 
 
 def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
-    """Load the GraphML file and convert it into a PyG graph."""
+    """Load a GraphML file and convert it into a PyG ``Data`` object.
+
+    Args:
+        graphml_path: Path to the input GraphML file.
+
+    Returns:
+        tuple[Data, list[str]]: A graph with node features, edges, and labels,
+        plus the node ID order used to build the tensors.
+    """
     graph = nx.read_graphml(graphml_path)
     node_ids: list[str] = list(graph.nodes())
     node_index: dict[str, int] = {node_id: index for index, node_id in enumerate(node_ids)}
@@ -96,7 +121,15 @@ def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
 
 
 def build_masks(num_nodes: int, seed: int) -> tuple[Tensor, Tensor, Tensor]:
-    """Create train, validation, and test masks."""
+    """Create boolean masks for train, validation, and test splits.
+
+    Args:
+        num_nodes: Total number of nodes in the graph.
+        seed: Random seed for reproducible splitting.
+
+    Returns:
+        tuple[Tensor, Tensor, Tensor]: Train, validation, and test masks.
+    """
     generator = torch.Generator().manual_seed(seed)
     order = torch.randperm(num_nodes, generator=generator)
     train_end = int(num_nodes * TRAIN_RATIO)
@@ -113,7 +146,15 @@ def build_masks(num_nodes: int, seed: int) -> tuple[Tensor, Tensor, Tensor]:
 
 
 def standardize_features(features: Tensor, train_mask: Tensor) -> Tensor:
-    """Standardize node features with train-node statistics."""
+    """Standardize features using statistics from training nodes only.
+
+    Args:
+        features: Node-feature matrix.
+        train_mask: Boolean mask that selects training nodes.
+
+    Returns:
+        Tensor: Standardized node-feature matrix.
+    """
     train_features = features[train_mask]
     mean = train_features.mean(dim=0, keepdim=True)
     std = train_features.std(dim=0, keepdim=True).clamp_min(1e-6)
@@ -121,7 +162,20 @@ def standardize_features(features: Tensor, train_mask: Tensor) -> Tensor:
 
 
 def train_and_evaluate(base_data: Data, node_ids: list[str], seed: int) -> tuple[dict[str, float], list[dict[str, float | int | str]]]:
-    """Train one seed and return metrics with predictions."""
+    """Train the model for one seed and evaluate it on the test split.
+
+    Args:
+        base_data: Base graph data before per-seed preprocessing.
+        node_ids: Node IDs aligned with the graph tensors.
+        seed: Random seed used for splitting and model initialization.
+
+    Returns:
+        tuple[dict[str, float], list[dict[str, float | int | str]]]: Aggregate
+        evaluation metrics and per-node prediction rows for the test split.
+
+    Raises:
+        RuntimeError: If no model checkpoint is recorded during training.
+    """
     random.seed(seed)
     torch.manual_seed(seed)
 
@@ -204,7 +258,12 @@ def train_and_evaluate(base_data: Data, node_ids: list[str], seed: int) -> tuple
 
 
 def write_predictions(rows: list[dict[str, float | int | str]], csv_path: Path) -> None:
-    """Write prediction rows to CSV."""
+    """Write prediction rows to a CSV file.
+
+    Args:
+        rows: Prediction rows to serialize.
+        csv_path: Output CSV path.
+    """
     fieldnames = ["seed", "node_id", "actual_flow_loss", "predicted_flow_loss"]
     with csv_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -213,7 +272,7 @@ def write_predictions(rows: list[dict[str, float | int | str]], csv_path: Path) 
 
 
 def main() -> None:
-    """Train the node-regression GNN across multiple random seeds."""
+    """Run multi-seed training and print summary metrics."""
     data, node_ids = build_data(GRAPHML_PATH)
     metric_rows: list[dict[str, float]] = []
     prediction_rows: list[dict[str, float | int | str]] = []
