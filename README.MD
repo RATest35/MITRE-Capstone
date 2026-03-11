@@ -1,4 +1,7 @@
 ## Version 0.1
+The dataset used in project was downloaded from Kaggle platform (https://www.kaggle.com/jsrojas/ip-network-traffic-flows-labeled-with-87-apps)
+
+
 Project organization is not fully developed. Have residual code and datasets from initial exploration.
 
 Important and relevant content is stored in the 'examples / ip-address' folder.
