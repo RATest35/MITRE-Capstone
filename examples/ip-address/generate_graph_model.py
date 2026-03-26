@@ -1,3 +1,4 @@
+import random
 import networkx as nx
 import pandas as pd
 
@@ -40,6 +41,10 @@ for n in U.nodes():
     U.nodes[n]["out_flow"] = outgoing_flow
     U.nodes[n]["flow_loss"] = incoming_flow + outgoing_flow
 
-# Write out U as a graphml file
-nx.write_graphml(U, f"ip_graph_{len(U.nodes())}_nodes_edges_with_flow.graphml")
-print("Nodes:", U.number_of_nodes(), "Edges:", U.number_of_edges())
+for n in H.nodes():
+    H.nodes[n]["random_probability"] = random.random()
+
+
+# Write out H as a graphml file
+nx.write_graphml(H, f"ip_graph_{len(H.nodes())}_nodes_{len(H.edges())}_edges_with_flow.graphml")
+print("Nodes:", H.number_of_nodes(), "Edges:", H.number_of_edges())
