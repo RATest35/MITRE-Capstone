@@ -1,3 +1,4 @@
+import random
 import networkx as nx
 import pandas as pd
 import heapq
@@ -75,6 +76,10 @@ for n in H.nodes():
             outgoing_flow += 0.0
 
     H.nodes[n]["flow_loss"] = incoming_flow + outgoing_flow
+
+for n in H.nodes():
+    H.nodes[n]["random_probability"] = random.random()
+
 
 # Write out H as a graphml file
 nx.write_graphml(H, f"ip_graph_{len(H.nodes())}_nodes_{len(H.edges())}_edges_with_flow.graphml")
