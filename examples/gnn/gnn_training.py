@@ -12,7 +12,7 @@ from torch_geometric.data import Data
 
 from gnn_config import DROPOUT, HIDDEN_CHANNELS, LEARNING_RATE, NUM_EPOCHS, PATIENCE, WEIGHT_DECAY
 from gnn_data import build_masks, standardize_features
-from gnn_model import FlowLossGNN
+from gnn_model import CompositeScoreGNN
 from gnn_output import PredictionRow
 
 
@@ -35,7 +35,7 @@ def train_and_evaluate(base_data: Data, node_ids: list[str]) -> tuple[MetricRow,
     data.test_mask = test_mask
     data.x = standardize_features(data.x, train_mask)
 
-    model = FlowLossGNN(
+    model = CompositeScoreGNN(
         input_channels=data.num_node_features,
         hidden_channels=HIDDEN_CHANNELS,
         dropout=DROPOUT,
@@ -55,7 +55,7 @@ def train_and_evaluate(base_data: Data, node_ids: list[str]) -> tuple[MetricRow,
 
 
 def _train_model(
-    model: FlowLossGNN,
+    model: CompositeScoreGNN,
     data: Data,
     optimizer: torch.optim.Optimizer,
     train_mask: Tensor,
@@ -130,8 +130,8 @@ def _build_prediction_rows(
         rows.append(
             {
                 "node_id": node_ids[node_position],
-                "actual_flow_loss": float(torch.expm1(labels[node_position]).item()),
-                "predicted_flow_loss": float(torch.expm1(predictions[node_position]).clamp_min(0.0).item()),
+                "actual_composite_score": float(torch.expm1(labels[node_position]).item()),
+                "predicted_composite_score": float(torch.expm1(predictions[node_position]).clamp_min(0.0).item()),
             }
         )
 

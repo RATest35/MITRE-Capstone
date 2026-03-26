@@ -8,10 +8,10 @@ from pathlib import Path
 BASE_DIR: Path = Path(__file__).resolve().parent
 
 # Path to the input GraphML file used for training and evaluation.
-GRAPHML_PATH: Path = BASE_DIR / "ip_graph_23511_nodes_edges_with_flow-2.graphml"
+GRAPHML_PATH: Path = BASE_DIR / "composite_risk.graphml"
 
 # Path to the CSV file where per-node predictions are written.
-PREDICTION_CSV_PATH: Path = BASE_DIR / "gnn_predictions.csv"
+PREDICTION_CSV_PATH: Path = BASE_DIR / "composite_score_predictions.csv"
 
 # Fraction of nodes assigned to the training split.
 TRAIN_RATIO: float = 0.6

@@ -11,13 +11,13 @@ class PredictionRow(TypedDict):
     """Serialized prediction output."""
 
     node_id: str
-    actual_flow_loss: float
-    predicted_flow_loss: float
+    actual_composite_score: float
+    predicted_composite_score: float
 
 
 def write_predictions(rows: list[PredictionRow], csv_path: Path) -> None:
     """Write predictions to CSV."""
-    fieldnames = ["node_id", "actual_flow_loss", "predicted_flow_loss"]
+    fieldnames = ["node_id", "actual_composite_score", "predicted_composite_score"]
     with csv_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()

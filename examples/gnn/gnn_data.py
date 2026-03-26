@@ -82,4 +82,4 @@ def _build_node_features(graph: nx.DiGraph, node_id: str) -> list[float]:
 
 def _build_label(graph: nx.DiGraph, node_id: str) -> float:
     """Build one node label."""
-    return math.log1p(float(graph.nodes[node_id]["flow_loss"]))
+    return math.log1p(float(graph.nodes[node_id]["composite_score"]))

@@ -24,7 +24,7 @@ def main() -> None:
         f"log_RMSE={metrics['log_rmse']:.4f}, "
         f"best_val_loss={metrics['best_val_loss']:.4f}"
     )
-    print(f"Predictions written to: {PREDICTION_CSV_PATH}")
+    print(f"Composite score predictions written to: {PREDICTION_CSV_PATH}")
 
 
 if __name__ == "__main__":

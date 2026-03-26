@@ -8,8 +8,8 @@ from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
 
 
-class FlowLossGNN(nn.Module):
-    """GraphSAGE regressor for node flow loss."""
+class CompositeScoreGNN(nn.Module):
+    """GraphSAGE regressor for node composite score."""
 
     def __init__(self, input_channels: int, hidden_channels: int, dropout: float) -> None:
         """Initialize the model."""
