@@ -2,8 +2,9 @@ import random
 import networkx as nx
 import pandas as pd
 
+DATA_PATH = r""
 
-df = pd.read_csv(r"C:\Users\ryant\Downloads\IP_dataset\cleaned_flows.csv",
+df = pd.read_csv(DATA_PATH,
                  usecols=["Source.IP","Destination.IP", "Total.Length.of.Fwd.Packets"])
 
 # Csv with source and destination IPs and the sum of the bytes from source to destination stored as flow
