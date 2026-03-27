@@ -49,8 +49,20 @@ def train_and_evaluate(base_data: Data, node_ids: list[str]) -> tuple[MetricRow,
     with torch.no_grad():
         predictions = model(data)
 
-    metrics = _build_metrics(predictions, data.y, test_mask, best_state["best_val_loss"])
-    prediction_rows = _build_prediction_rows(predictions, data.y, test_mask, node_ids)
+    metrics = _build_metrics(
+        predictions,
+        data.local_flow_loss,
+        data.composite_score,
+        test_mask,
+        best_state["best_val_loss"],
+    )
+    prediction_rows = _build_prediction_rows(
+        predictions,
+        data.local_flow_loss,
+        data.composite_score,
+        test_mask,
+        node_ids,
+    )
     return metrics, prediction_rows
 
 
@@ -97,15 +109,17 @@ def _train_model(
 
 def _build_metrics(
     predictions: Tensor,
-    labels: Tensor,
+    local_flow_loss: Tensor,
+    composite_scores: Tensor,
     test_mask: Tensor,
     best_val_loss: float,
 ) -> MetricRow:
     """Build aggregate metrics."""
-    actual_log = labels[test_mask]
-    predicted_log = predictions[test_mask]
-    actual = torch.expm1(actual_log)
-    predicted = torch.expm1(predicted_log).clamp_min(0.0)
+    predicted_adjustment = torch.expm1(predictions[test_mask]).clamp_min(0.0)
+    actual = composite_scores[test_mask]
+    predicted = local_flow_loss[test_mask] + predicted_adjustment
+    actual_log = torch.log1p(actual)
+    predicted_log = torch.log1p(predicted)
 
     return {
         "mae": torch.mean(torch.abs(predicted - actual)).item(),
@@ -118,7 +132,8 @@ def _build_metrics(
 
 def _build_prediction_rows(
     predictions: Tensor,
-    labels: Tensor,
+    local_flow_loss: Tensor,
+    composite_scores: Tensor,
     test_mask: Tensor,
     node_ids: list[str],
 ) -> list[PredictionRow]:
@@ -130,8 +145,13 @@ def _build_prediction_rows(
         rows.append(
             {
                 "node_id": node_ids[node_position],
-                "actual_composite_score": float(torch.expm1(labels[node_position]).item()),
-                "predicted_composite_score": float(torch.expm1(predictions[node_position]).clamp_min(0.0).item()),
+                "actual_composite_score": float(composite_scores[node_position].item()),
+                "predicted_composite_score": float(
+                    (
+                        local_flow_loss[node_position]
+                        + torch.expm1(predictions[node_position]).clamp_min(0.0)
+                    ).item()
+                ),
             }
         )
 
