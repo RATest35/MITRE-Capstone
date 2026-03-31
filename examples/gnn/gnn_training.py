@@ -11,7 +11,7 @@ from torch import Tensor
 from torch_geometric.data import Data
 
 from gnn_config import DROPOUT, HIDDEN_CHANNELS, LEARNING_RATE, NUM_EPOCHS, PATIENCE, WEIGHT_DECAY
-from gnn_data import build_masks, standardize_features
+from gnn_data import build_masks, standardize_features, standardize_targets
 from gnn_model import CompositeScoreGNN
 from gnn_output import PredictionRow
 
@@ -34,6 +34,7 @@ def train_and_evaluate(base_data: Data, node_ids: list[str]) -> tuple[MetricRow,
     data.val_mask = val_mask
     data.test_mask = test_mask
     data.x = standardize_features(data.x, train_mask)
+    data.y, target_mean, target_std = standardize_targets(data.y, train_mask)
 
     model = CompositeScoreGNN(
         input_channels=data.num_node_features,
@@ -48,17 +49,16 @@ def train_and_evaluate(base_data: Data, node_ids: list[str]) -> tuple[MetricRow,
 
     with torch.no_grad():
         predictions = model(data)
+        predictions = predictions * target_std + target_mean
 
     metrics = _build_metrics(
         predictions,
-        data.local_flow_loss,
         data.composite_score,
         test_mask,
         best_state["best_val_loss"],
     )
     prediction_rows = _build_prediction_rows(
         predictions,
-        data.local_flow_loss,
         data.composite_score,
         test_mask,
         node_ids,
@@ -109,15 +109,13 @@ def _train_model(
 
 def _build_metrics(
     predictions: Tensor,
-    local_flow_loss: Tensor,
     composite_scores: Tensor,
     test_mask: Tensor,
     best_val_loss: float,
 ) -> MetricRow:
     """Build aggregate metrics."""
-    predicted_adjustment = torch.expm1(predictions[test_mask]).clamp_min(0.0)
     actual = composite_scores[test_mask]
-    predicted = local_flow_loss[test_mask] + predicted_adjustment
+    predicted = torch.expm1(predictions[test_mask]).clamp_min(0.0)
     actual_log = torch.log1p(actual)
     predicted_log = torch.log1p(predicted)
 
@@ -132,7 +130,6 @@ def _build_metrics(
 
 def _build_prediction_rows(
     predictions: Tensor,
-    local_flow_loss: Tensor,
     composite_scores: Tensor,
     test_mask: Tensor,
     node_ids: list[str],
@@ -146,12 +143,7 @@ def _build_prediction_rows(
             {
                 "node_id": node_ids[node_position],
                 "actual_composite_score": float(composite_scores[node_position].item()),
-                "predicted_composite_score": float(
-                    (
-                        local_flow_loss[node_position]
-                        + torch.expm1(predictions[node_position]).clamp_min(0.0)
-                    ).item()
-                ),
+                "predicted_composite_score": float(torch.expm1(predictions[node_position]).clamp_min(0.0).item()),
             }
         )
 

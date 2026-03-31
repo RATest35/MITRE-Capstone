@@ -24,9 +24,8 @@ def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
 
     records = [_build_node_record(graph, node_id) for node_id in node_ids]
     node_features = [record[0] for record in records]
-    local_flow_losses = [record[1] for record in records]
-    composite_scores = [record[2] for record in records]
-    labels = [math.log1p(composite_score - local_flow_loss) for local_flow_loss, composite_score in zip(local_flow_losses, composite_scores)]
+    composite_scores = [record[1] for record in records]
+    labels = [math.log1p(composite_score) for composite_score in composite_scores]
     edge_pairs = [[node_index[source], node_index[target]] for source, target in graph.edges()]
     edge_index = torch.tensor(edge_pairs, dtype=torch.long).t().contiguous()
 
@@ -34,7 +33,6 @@ def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
         x=torch.tensor(node_features, dtype=torch.float32),
         edge_index=edge_index,
         y=torch.tensor(labels, dtype=torch.float32),
-        local_flow_loss=torch.tensor(local_flow_losses, dtype=torch.float32),
         composite_score=torch.tensor(composite_scores, dtype=torch.float32),
     )
     return data, node_ids
@@ -63,7 +61,15 @@ def standardize_features(features: Tensor, train_mask: Tensor) -> Tensor:
     return (features - mean) / std
 
 
-def _build_node_record(graph: nx.DiGraph, node_id: str) -> tuple[list[float], float, float]:
+def standardize_targets(targets: Tensor, train_mask: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    """Standardize targets with train-only statistics."""
+    train_targets = targets[train_mask]
+    mean = train_targets.mean()
+    std = train_targets.std().clamp_min(1e-6)
+    return (targets - mean) / std, mean, std
+
+
+def _build_node_record(graph: nx.DiGraph, node_id: str) -> tuple[list[float], float]:
     """Build features and targets for one node."""
     incoming_flows = [float(edge_data[FLOW_ATTR]) for _, _, edge_data in graph.in_edges(node_id, data=True)]
     outgoing_flows = [float(edge_data[FLOW_ATTR]) for _, _, edge_data in graph.out_edges(node_id, data=True)]
@@ -100,7 +106,7 @@ def _build_node_record(graph: nx.DiGraph, node_id: str) -> tuple[list[float], fl
         incoming_flow_nonzero_count,
         outgoing_flow_nonzero_count,
     ]
-    return features, total_flow, composite_score
+    return features, composite_score
 
 
 def _build_flow_std(flows: list[float], mean_flow: float) -> float:
