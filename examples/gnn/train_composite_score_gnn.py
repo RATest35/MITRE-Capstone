@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -31,11 +32,14 @@ class TrainConfig:
     weight_decay: float
     epochs: int
     batch_size: int
+    eval_batch_size: int
     train_ratio: float
     val_ratio: float
     num_hops: int
     max_in_neighbors: int
     max_out_neighbors: int
+    num_workers: int
+    prefetch_factor: int
     train_seed: int
     patience: int
     device: str
@@ -53,11 +57,14 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--eval-batch-size", type=int, default=512)
     parser.add_argument("--train-ratio", type=float, default=0.7)
     parser.add_argument("--val-ratio", type=float, default=0.15)
     parser.add_argument("--num-hops", type=int, default=2)
     parser.add_argument("--max-in-neighbors", type=int, default=20)
     parser.add_argument("--max-out-neighbors", type=int, default=20)
+    parser.add_argument("--num-workers", type=int, default=max((os.cpu_count() or 1) - 2, 1))
+    parser.add_argument("--prefetch-factor", type=int, default=4)
     parser.add_argument("--train-seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", type=str, default="cpu")
@@ -72,11 +79,14 @@ def parse_args() -> TrainConfig:
         weight_decay=arguments.weight_decay,
         epochs=arguments.epochs,
         batch_size=arguments.batch_size,
+        eval_batch_size=arguments.eval_batch_size,
         train_ratio=arguments.train_ratio,
         val_ratio=arguments.val_ratio,
         num_hops=arguments.num_hops,
         max_in_neighbors=arguments.max_in_neighbors,
         max_out_neighbors=arguments.max_out_neighbors,
+        num_workers=arguments.num_workers,
+        prefetch_factor=arguments.prefetch_factor,
         train_seed=arguments.train_seed,
         patience=arguments.patience,
         device=arguments.device,
@@ -123,10 +133,17 @@ def build_dataloaders(
         training=False,
         seed=config.train_seed,
     )
+    loader_kwargs: dict[str, object] = {
+        "num_workers": config.num_workers,
+        "persistent_workers": config.num_workers > 0,
+    }
+    if config.num_workers > 0:
+        loader_kwargs["prefetch_factor"] = config.prefetch_factor
+
     return (
-        DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True),
-        DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False),
-        DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False),
+        DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, **loader_kwargs),
+        DataLoader(val_dataset, batch_size=config.eval_batch_size, shuffle=False, **loader_kwargs),
+        DataLoader(test_dataset, batch_size=config.eval_batch_size, shuffle=False, **loader_kwargs),
     )
 
 
@@ -143,7 +160,7 @@ def train_epoch(
 
     for batch in tqdm(loader, desc="Train", leave=False):
         batch = batch.to(device)
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         predictions = model(batch.x, batch.edge_index, batch.edge_weight)
         loss = criterion(predictions[batch.seed_mask], batch.y[batch.seed_mask])
         loss.backward()
