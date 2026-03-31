@@ -14,6 +14,14 @@ from torch_geometric.data import Data
 
 
 EPSILON: float = 1e-6
+DEFAULT_BASIC_GROUPS: tuple[str, ...] = ("node_flow", "node_degree", "flow_balance", "ip")
+DEFAULT_EXTENDED_GROUPS: tuple[str, ...] = DEFAULT_BASIC_GROUPS + (
+    "neighbor_flow",
+    "neighbor_degree",
+    "neighbor_total_flow",
+    "two_hop",
+    "hub_ratio",
+)
 
 
 @dataclass(frozen=True)
@@ -210,6 +218,7 @@ def _build_feature_matrix(
     in_neighbors: list[list[tuple[int, float]]],
     out_neighbors: list[list[tuple[int, float]]],
     feature_set: str,
+    feature_groups: tuple[str, ...],
 ) -> torch.Tensor:
     """Build node-level features from graph structure."""
     rows: list[list[float]] = []
@@ -234,28 +243,54 @@ def _build_feature_matrix(
         inbound_share = in_flow / max(total_flow, EPSILON)
         outbound_share = out_flow / max(total_flow, EPSILON)
 
-        row = [
-            math.log1p(in_flow),
-            math.log1p(out_flow),
-            math.log1p(total_flow),
-            math.log1p(abs_gap),
-            math.log1p(flow_ratio),
-            math.log1p(in_degree),
-            math.log1p(out_degree),
-            math.log1p(total_degree),
-            math.log1p(avg_in_flow),
-            math.log1p(avg_out_flow),
-            math.log1p(max_in_flow),
-            math.log1p(max_out_flow),
-            inbound_share,
-            outbound_share,
-        ]
-        row.extend(_parse_ip_features(node_id))
+        feature_map = {
+            "node_flow": [
+                math.log1p(in_flow),
+                math.log1p(out_flow),
+                math.log1p(total_flow),
+                math.log1p(abs_gap),
+                math.log1p(flow_ratio),
+                math.log1p(avg_in_flow),
+                math.log1p(avg_out_flow),
+                math.log1p(max_in_flow),
+                math.log1p(max_out_flow),
+            ],
+            "node_degree": [
+                math.log1p(in_degree),
+                math.log1p(out_degree),
+                math.log1p(total_degree),
+            ],
+            "flow_balance": [inbound_share, outbound_share],
+            "ip": _parse_ip_features(node_id),
+        }
         if feature_set == "extended":
-            row.extend(_extended_feature_row(index, in_neighbors, out_neighbors))
+            extended_values = _extended_feature_row(index, in_neighbors, out_neighbors)
+            feature_map.update(
+                {
+                    "neighbor_flow": extended_values[:8],
+                    "neighbor_degree": extended_values[8:14],
+                    "neighbor_total_flow": extended_values[14:20],
+                    "two_hop": extended_values[20:24],
+                    "hub_ratio": extended_values[24:28],
+                }
+            )
+        row = [value for group_name in feature_groups for value in feature_map[group_name]]
         rows.append(row)
 
     return torch.tensor(rows, dtype=torch.float32)
+
+
+def resolve_feature_groups(feature_set: str, feature_groups: tuple[str, ...] | None) -> tuple[str, ...]:
+    """Resolve active feature groups."""
+    default_groups = DEFAULT_EXTENDED_GROUPS if feature_set == "extended" else DEFAULT_BASIC_GROUPS
+    if feature_groups is None:
+        return default_groups
+
+    allowed_groups = set(default_groups)
+    invalid_groups = [group_name for group_name in feature_groups if group_name not in allowed_groups]
+    if invalid_groups:
+        raise ValueError(f"Invalid feature groups for {feature_set}: {invalid_groups}")
+    return feature_groups
 
 
 def _build_sample_weights(raw_targets: torch.Tensor, mode: str, scale: float) -> torch.Tensor:
@@ -278,6 +313,7 @@ def load_graph_dataset(
     weight_mode: str,
     weight_scale: float,
     split_prefix_len: int,
+    feature_groups: tuple[str, ...] | None = None,
 ) -> GraphDataset:
     """Load a GraphML file and build graph tensors."""
     graph = nx.read_graphml(graphml_path)
@@ -304,7 +340,8 @@ def load_graph_dataset(
     _sort_neighbors(in_neighbors)
     _sort_neighbors(out_neighbors)
 
-    features = _build_feature_matrix(node_ids, in_neighbors, out_neighbors, feature_set)
+    active_feature_groups = resolve_feature_groups(feature_set, feature_groups)
+    features = _build_feature_matrix(node_ids, in_neighbors, out_neighbors, feature_set, active_feature_groups)
     raw_target_tensor = torch.tensor(raw_targets, dtype=torch.float32)
     targets = torch.log1p(raw_target_tensor)
     sample_weights = _build_sample_weights(raw_target_tensor, weight_mode, weight_scale)

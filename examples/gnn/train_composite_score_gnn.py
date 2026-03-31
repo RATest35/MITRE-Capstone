@@ -46,6 +46,7 @@ class TrainConfig:
     prefetch_factor: int
     selection_metric: str
     feature_set: str
+    feature_groups: tuple[str, ...] | None
     group_by_prefix: int
     split_bucket_size: int
     weight_mode: str
@@ -80,6 +81,7 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--prefetch-factor", type=int, default=4)
     parser.add_argument("--selection-metric", type=str, default="ndcg_1pct")
     parser.add_argument("--feature-set", type=str, choices=["basic", "extended"], default="basic")
+    parser.add_argument("--feature-groups", type=str, default="")
     parser.add_argument("--group-by-prefix", type=int, choices=[16, 24], default=24)
     parser.add_argument("--split-bucket-size", type=int, default=32)
     parser.add_argument("--weight-mode", type=str, choices=["linear", "sqrt", "quadratic"], default="linear")
@@ -91,6 +93,7 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", type=str, default="cpu")
     arguments = parser.parse_args()
+    feature_groups = tuple(part.strip() for part in arguments.feature_groups.split(",") if part.strip()) or None
     return TrainConfig(
         graphml_path=arguments.graphml_path,
         output_dir=arguments.output_dir,
@@ -111,6 +114,7 @@ def parse_args() -> TrainConfig:
         prefetch_factor=arguments.prefetch_factor,
         selection_metric=arguments.selection_metric,
         feature_set=arguments.feature_set,
+        feature_groups=feature_groups,
         group_by_prefix=arguments.group_by_prefix,
         split_bucket_size=arguments.split_bucket_size,
         weight_mode=arguments.weight_mode,
@@ -335,6 +339,7 @@ def main() -> None:
     dataset = load_graph_dataset(
         graphml_path=config.graphml_path,
         feature_set=config.feature_set,
+        feature_groups=config.feature_groups,
         weight_mode=config.weight_mode,
         weight_scale=config.weight_scale,
         split_prefix_len=config.group_by_prefix // 8,
