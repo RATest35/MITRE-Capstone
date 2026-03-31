@@ -1,0 +1,316 @@
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from ipaddress import ip_address
+from pathlib import Path
+from typing import Iterator
+
+import networkx as nx
+import numpy as np
+import torch
+from torch.utils.data import Dataset
+from torch_geometric.data import Data
+
+
+EPSILON: float = 1e-6
+
+
+@dataclass(frozen=True)
+class GraphDataset:
+    """Container for graph tensors and adjacency lists."""
+
+    node_ids: list[str]
+    node_id_to_index: dict[str, int]
+    features: torch.Tensor
+    targets: torch.Tensor
+    raw_targets: torch.Tensor
+    in_neighbors: list[list[tuple[int, float]]]
+    out_neighbors: list[list[tuple[int, float]]]
+
+
+@dataclass(frozen=True)
+class SamplerConfig:
+    """Settings for rooted subgraph sampling."""
+
+    num_hops: int
+    max_in_neighbors: int
+    max_out_neighbors: int
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    """Convert a value to float."""
+    if value is None:
+        return default
+    return float(value)
+
+
+def _parse_ip_features(node_id: str) -> list[float]:
+    """Build numeric IP features."""
+    try:
+        parsed = ip_address(node_id)
+    except ValueError:
+        return [0.0] * 9
+
+    if parsed.version != 4:
+        return [0.0] * 9
+
+    octets = [int(part) / 255.0 for part in node_id.split(".")]
+    is_private = float(parsed.is_private)
+    is_public = 1.0 - is_private
+    is_ten = float(node_id.startswith("10."))
+    is_172 = float(172 == int(node_id.split(".")[0]) and 16 <= int(node_id.split(".")[1]) <= 31)
+    is_192 = float(node_id.startswith("192.168."))
+    return octets + [is_private, is_public, is_ten, is_172, is_192]
+
+
+def _sort_neighbors(neighbors: list[list[tuple[int, float]]]) -> None:
+    """Sort neighbors by flow descending."""
+    for values in neighbors:
+        values.sort(key=lambda item: item[1], reverse=True)
+
+
+def _build_feature_matrix(
+    node_ids: list[str],
+    in_neighbors: list[list[tuple[int, float]]],
+    out_neighbors: list[list[tuple[int, float]]],
+) -> torch.Tensor:
+    """Build node-level features from graph structure."""
+    rows: list[list[float]] = []
+    for index, node_id in enumerate(node_ids):
+        incoming = in_neighbors[index]
+        outgoing = out_neighbors[index]
+
+        in_degree = float(len(incoming))
+        out_degree = float(len(outgoing))
+        total_degree = in_degree + out_degree
+
+        in_flow = sum(flow for _, flow in incoming)
+        out_flow = sum(flow for _, flow in outgoing)
+        total_flow = in_flow + out_flow
+
+        avg_in_flow = in_flow / max(in_degree, 1.0)
+        avg_out_flow = out_flow / max(out_degree, 1.0)
+        max_in_flow = max([flow for _, flow in incoming], default=0.0)
+        max_out_flow = max([flow for _, flow in outgoing], default=0.0)
+        abs_gap = abs(in_flow - out_flow)
+        flow_ratio = in_flow / max(out_flow, EPSILON)
+        inbound_share = in_flow / max(total_flow, EPSILON)
+        outbound_share = out_flow / max(total_flow, EPSILON)
+
+        row = [
+            math.log1p(in_flow),
+            math.log1p(out_flow),
+            math.log1p(total_flow),
+            math.log1p(abs_gap),
+            math.log1p(flow_ratio),
+            math.log1p(in_degree),
+            math.log1p(out_degree),
+            math.log1p(total_degree),
+            math.log1p(avg_in_flow),
+            math.log1p(avg_out_flow),
+            math.log1p(max_in_flow),
+            math.log1p(max_out_flow),
+            inbound_share,
+            outbound_share,
+        ]
+        row.extend(_parse_ip_features(node_id))
+        rows.append(row)
+
+    return torch.tensor(rows, dtype=torch.float32)
+
+
+def load_graph_dataset(graphml_path: Path) -> GraphDataset:
+    """Load a GraphML file and build graph tensors."""
+    graph = nx.read_graphml(graphml_path)
+    directed_graph = nx.DiGraph(graph)
+
+    node_ids = list(directed_graph.nodes())
+    node_id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
+
+    in_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
+    out_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
+    raw_targets: list[float] = []
+
+    for node_id in node_ids:
+        raw_targets.append(_safe_float(directed_graph.nodes[node_id].get("composite_score"), 0.0))
+
+    for source, target, data in directed_graph.edges(data=True):
+        source_index = node_id_to_index[source]
+        target_index = node_id_to_index[target]
+        flow = _safe_float(data.get("flow"), 0.0)
+        out_neighbors[source_index].append((target_index, flow))
+        in_neighbors[target_index].append((source_index, flow))
+
+    _sort_neighbors(in_neighbors)
+    _sort_neighbors(out_neighbors)
+
+    features = _build_feature_matrix(node_ids, in_neighbors, out_neighbors)
+    raw_target_tensor = torch.tensor(raw_targets, dtype=torch.float32)
+    targets = torch.log1p(raw_target_tensor)
+
+    return GraphDataset(
+        node_ids=node_ids,
+        node_id_to_index=node_id_to_index,
+        features=features,
+        targets=targets,
+        raw_targets=raw_target_tensor,
+        in_neighbors=in_neighbors,
+        out_neighbors=out_neighbors,
+    )
+
+
+def stratified_score_split(
+    targets: torch.Tensor,
+    train_ratio: float,
+    val_ratio: float,
+    seed: int,
+    bucket_size: int = 256,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Split nodes while preserving target distribution."""
+    values = targets.detach().cpu().numpy()
+    order = np.argsort(values)
+    rng = np.random.default_rng(seed)
+
+    train_indices: list[int] = []
+    val_indices: list[int] = []
+    test_indices: list[int] = []
+
+    for start in range(0, len(order), bucket_size):
+        bucket = order[start:start + bucket_size].copy()
+        rng.shuffle(bucket)
+        train_end = int(len(bucket) * train_ratio)
+        val_end = train_end + int(len(bucket) * val_ratio)
+        train_indices.extend(bucket[:train_end].tolist())
+        val_indices.extend(bucket[train_end:val_end].tolist())
+        test_indices.extend(bucket[val_end:].tolist())
+
+    return (
+        np.array(train_indices, dtype=np.int64),
+        np.array(val_indices, dtype=np.int64),
+        np.array(test_indices, dtype=np.int64),
+    )
+
+
+def standardize_features(features: torch.Tensor, train_indices: np.ndarray) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Standardize features with train-only statistics."""
+    train_tensor = features[torch.as_tensor(train_indices, dtype=torch.long)]
+    mean = train_tensor.mean(dim=0)
+    std = train_tensor.std(dim=0).clamp_min(EPSILON)
+    standardized = (features - mean) / std
+    return standardized, mean, std
+
+
+class RootedSubgraphDataset(Dataset[Data]):
+    """Dataset that samples a rooted directed subgraph per node."""
+
+    def __init__(
+        self,
+        graph_dataset: GraphDataset,
+        node_indices: np.ndarray,
+        sampler_config: SamplerConfig,
+        training: bool,
+        seed: int,
+    ) -> None:
+        self.graph_dataset = graph_dataset
+        self.node_indices = node_indices
+        self.sampler_config = sampler_config
+        self.training = training
+        self.rng = np.random.default_rng(seed)
+
+    def __len__(self) -> int:
+        """Return dataset size."""
+        return len(self.node_indices)
+
+    def __getitem__(self, item: int) -> Data:
+        """Sample a rooted subgraph."""
+        root_index = int(self.node_indices[item])
+        sampled_nodes = self._sample_nodes(root_index)
+        local_index = {node_index: offset for offset, node_index in enumerate(sampled_nodes)}
+
+        edge_pairs: list[list[int]] = []
+        edge_weights: list[float] = []
+
+        for source in sampled_nodes:
+            for target, flow in self.graph_dataset.out_neighbors[source]:
+                if target not in local_index:
+                    continue
+                edge_pairs.append([local_index[source], local_index[target]])
+                edge_weights.append(math.log1p(flow))
+
+        if edge_pairs:
+            edge_index = torch.tensor(edge_pairs, dtype=torch.long).t().contiguous()
+            edge_weight = torch.tensor(edge_weights, dtype=torch.float32)
+        else:
+            edge_index = torch.empty((2, 0), dtype=torch.long)
+            edge_weight = torch.empty((0,), dtype=torch.float32)
+
+        x = self.graph_dataset.features[torch.as_tensor(sampled_nodes, dtype=torch.long)]
+        y = torch.zeros(len(sampled_nodes), dtype=torch.float32)
+        raw_y = torch.zeros(len(sampled_nodes), dtype=torch.float32)
+        seed_mask = torch.zeros(len(sampled_nodes), dtype=torch.bool)
+        seed_mask[0] = True
+        y[0] = self.graph_dataset.targets[root_index]
+        raw_y[0] = self.graph_dataset.raw_targets[root_index]
+
+        return Data(
+            x=x,
+            edge_index=edge_index,
+            edge_weight=edge_weight,
+            y=y,
+            raw_y=raw_y,
+            seed_mask=seed_mask,
+            root_node=torch.tensor([root_index], dtype=torch.long),
+        )
+
+    def _sample_nodes(self, root_index: int) -> list[int]:
+        """Collect nodes around a root node."""
+        sampled_nodes = [root_index]
+        seen = {root_index}
+        frontier = [root_index]
+
+        for _ in range(self.sampler_config.num_hops):
+            next_frontier: list[int] = []
+            for node_index in frontier:
+                for neighbor_index in self._pick_neighbors(
+                    self.graph_dataset.in_neighbors[node_index],
+                    self.sampler_config.max_in_neighbors,
+                ):
+                    if neighbor_index in seen:
+                        continue
+                    seen.add(neighbor_index)
+                    sampled_nodes.append(neighbor_index)
+                    next_frontier.append(neighbor_index)
+
+                for neighbor_index in self._pick_neighbors(
+                    self.graph_dataset.out_neighbors[node_index],
+                    self.sampler_config.max_out_neighbors,
+                ):
+                    if neighbor_index in seen:
+                        continue
+                    seen.add(neighbor_index)
+                    sampled_nodes.append(neighbor_index)
+                    next_frontier.append(neighbor_index)
+
+            if not next_frontier:
+                break
+            frontier = next_frontier
+
+        return sampled_nodes
+
+    def _pick_neighbors(self, neighbors: list[tuple[int, float]], limit: int) -> Iterator[int]:
+        """Select neighbor indices for one hop."""
+        if limit <= 0 or not neighbors:
+            return iter(())
+
+        if len(neighbors) <= limit:
+            return (neighbor_index for neighbor_index, _ in neighbors)
+
+        if not self.training:
+            return (neighbor_index for neighbor_index, _ in neighbors[:limit])
+
+        weights = np.array([max(flow, 0.0) + 1.0 for _, flow in neighbors], dtype=np.float64)
+        probabilities = weights / weights.sum()
+        sampled_positions = self.rng.choice(len(neighbors), size=limit, replace=False, p=probabilities)
+        sampled_positions.sort()
+        return (neighbors[position][0] for position in sampled_positions)
