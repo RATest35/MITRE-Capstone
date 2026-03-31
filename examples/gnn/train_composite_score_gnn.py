@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -17,6 +18,9 @@ from tqdm import tqdm
 from composite_dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_split
 from composite_metrics import regression_metrics
 from composite_model import CompositeScoreGNN
+
+
+PROGRESS_ENABLED: bool = sys.stdout.isatty()
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,14 @@ class TrainConfig:
     num_workers: int
     prefetch_factor: int
     selection_metric: str
+    feature_set: str
+    group_by_prefix: int
+    split_bucket_size: int
+    weight_mode: str
+    weight_scale: float
+    ranking_loss_weight: float
+    ranking_margin: float
+    ranking_pairs: int
     train_seed: int
     patience: int
     device: str
@@ -67,6 +79,14 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--num-workers", type=int, default=max((os.cpu_count() or 1) - 2, 1))
     parser.add_argument("--prefetch-factor", type=int, default=4)
     parser.add_argument("--selection-metric", type=str, default="ndcg_1pct")
+    parser.add_argument("--feature-set", type=str, choices=["basic", "extended"], default="basic")
+    parser.add_argument("--group-by-prefix", type=int, choices=[16, 24], default=24)
+    parser.add_argument("--split-bucket-size", type=int, default=32)
+    parser.add_argument("--weight-mode", type=str, choices=["linear", "sqrt", "quadratic"], default="linear")
+    parser.add_argument("--weight-scale", type=float, default=4.0)
+    parser.add_argument("--ranking-loss-weight", type=float, default=0.0)
+    parser.add_argument("--ranking-margin", type=float, default=0.02)
+    parser.add_argument("--ranking-pairs", type=int, default=128)
     parser.add_argument("--train-seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", type=str, default="cpu")
@@ -90,6 +110,14 @@ def parse_args() -> TrainConfig:
         num_workers=arguments.num_workers,
         prefetch_factor=arguments.prefetch_factor,
         selection_metric=arguments.selection_metric,
+        feature_set=arguments.feature_set,
+        group_by_prefix=arguments.group_by_prefix,
+        split_bucket_size=arguments.split_bucket_size,
+        weight_mode=arguments.weight_mode,
+        weight_scale=arguments.weight_scale,
+        ranking_loss_weight=arguments.ranking_loss_weight,
+        ranking_margin=arguments.ranking_margin,
+        ranking_pairs=arguments.ranking_pairs,
         train_seed=arguments.train_seed,
         patience=arguments.patience,
         device=arguments.device,
@@ -158,12 +186,13 @@ def train_epoch(
     loader: DataLoader,
     optimizer: AdamW,
     device: torch.device,
+    config: TrainConfig,
 ) -> float:
     """Run one training epoch."""
     model.train()
     losses: list[float] = []
 
-    for batch in tqdm(loader, desc="Train", leave=False):
+    for batch in tqdm(loader, desc="Train", leave=False, disable=not PROGRESS_ENABLED):
         batch = batch.to(device)
         optimizer.zero_grad(set_to_none=True)
         predictions = model(batch.x, batch.edge_index, batch.edge_weight)
@@ -171,7 +200,15 @@ def train_epoch(
         seed_targets = batch.y[batch.seed_mask]
         seed_weights = batch.y_weight[batch.seed_mask]
         per_sample_loss = nn.functional.huber_loss(seed_predictions, seed_targets, reduction="none")
-        loss = (per_sample_loss * seed_weights).sum() / seed_weights.sum().clamp_min(1e-6)
+        regression_loss = (per_sample_loss * seed_weights).sum() / seed_weights.sum().clamp_min(1e-6)
+        ranking_loss = pairwise_ranking_loss(
+            seed_predictions,
+            seed_targets,
+            seed_weights,
+            margin=config.ranking_margin,
+            max_pairs=config.ranking_pairs,
+        )
+        loss = regression_loss + config.ranking_loss_weight * ranking_loss
         loss.backward()
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
@@ -192,7 +229,7 @@ def evaluate(
     rows: list[dict[str, float]] = []
 
     with torch.no_grad():
-        for batch in tqdm(loader, desc="Eval", leave=False):
+        for batch in tqdm(loader, desc="Eval", leave=False, disable=not PROGRESS_ENABLED):
             batch = batch.to(device)
             predictions = model(batch.x, batch.edge_index, batch.edge_weight)
             seed_predictions = predictions[batch.seed_mask]
@@ -220,6 +257,34 @@ def evaluate(
     metrics = regression_metrics(np.array(actual_logs), np.array(predicted_logs))
     mean_loss = float(np.mean(losses)) if losses else 0.0
     return mean_loss, metrics, rows
+
+
+def pairwise_ranking_loss(
+    predictions: torch.Tensor,
+    targets: torch.Tensor,
+    weights: torch.Tensor,
+    margin: float,
+    max_pairs: int,
+) -> torch.Tensor:
+    """Compute a simple pairwise ranking loss."""
+    if predictions.numel() < 2 or max_pairs <= 0:
+        return predictions.new_zeros(())
+
+    order = torch.argsort(targets)
+    pair_count = min(max_pairs, predictions.numel() // 2)
+    if pair_count == 0:
+        return predictions.new_zeros(())
+
+    low_indices = order[:pair_count]
+    high_indices = order[-pair_count:]
+    valid_mask = targets[high_indices] > targets[low_indices]
+    if not torch.any(valid_mask):
+        return predictions.new_zeros(())
+
+    gaps = predictions[high_indices][valid_mask] - predictions[low_indices][valid_mask]
+    pair_weights = 0.5 * (weights[high_indices][valid_mask] + weights[low_indices][valid_mask])
+    pair_losses = torch.relu(margin - gaps)
+    return (pair_losses * pair_weights).sum() / pair_weights.sum().clamp_min(1e-6)
 
 
 def write_predictions(
@@ -251,6 +316,15 @@ def write_predictions(
             )
 
 
+def serializable_config(config: TrainConfig) -> dict[str, object]:
+    """Convert config values into JSON-safe objects."""
+    values = asdict(config)
+    return {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in values.items()
+    }
+
+
 def main() -> None:
     """Train and evaluate the composite score GNN."""
     config = parse_args()
@@ -258,20 +332,28 @@ def main() -> None:
     set_seed(config.train_seed)
     device = torch.device(config.device)
 
-    dataset = load_graph_dataset(config.graphml_path)
+    dataset = load_graph_dataset(
+        graphml_path=config.graphml_path,
+        feature_set=config.feature_set,
+        weight_mode=config.weight_mode,
+        weight_scale=config.weight_scale,
+        split_prefix_len=config.group_by_prefix // 8,
+    )
+    group_keys = dataset.group_keys
     train_indices, val_indices, test_indices = subnet_group_split(
-        group_keys=dataset.group_keys,
+        group_keys=group_keys,
         targets=dataset.targets,
         train_ratio=config.train_ratio,
         val_ratio=config.val_ratio,
         seed=config.train_seed,
+        bucket_size=config.split_bucket_size,
     )
 
     standardized_features, feature_mean, feature_std = standardize_features(dataset.features, train_indices)
     dataset = GraphDataset(
         node_ids=dataset.node_ids,
         node_id_to_index=dataset.node_id_to_index,
-        group_keys=dataset.group_keys,
+        group_keys=group_keys,
         features=standardized_features,
         targets=dataset.targets,
         raw_targets=dataset.raw_targets,
@@ -302,7 +384,7 @@ def main() -> None:
     history: list[dict[str, float]] = []
 
     for epoch in range(1, config.epochs + 1):
-        train_loss = train_epoch(model, train_loader, optimizer, device)
+        train_loss = train_epoch(model, train_loader, optimizer, device, config)
         val_loss, val_metrics, _ = evaluate(model, val_loader, device)
         val_score = float(val_metrics[config.selection_metric])
         history.append(
@@ -354,17 +436,18 @@ def main() -> None:
     write_predictions(test_rows, dataset.node_ids, predictions_path)
 
     metrics_payload = {
+        "config": serializable_config(config),
         "test_loss": test_loss,
         "test_metrics": test_metrics,
         "history": history,
         "train_size": int(len(train_indices)),
         "val_size": int(len(val_indices)),
         "test_size": int(len(test_indices)),
-        "train_group_count": int(len({dataset.group_keys[index] for index in train_indices.tolist()})),
-        "val_group_count": int(len({dataset.group_keys[index] for index in val_indices.tolist()})),
-        "test_group_count": int(len({dataset.group_keys[index] for index in test_indices.tolist()})),
+        "train_group_count": int(len({group_keys[index] for index in train_indices.tolist()})),
+        "val_group_count": int(len({group_keys[index] for index in val_indices.tolist()})),
+        "test_group_count": int(len({group_keys[index] for index in test_indices.tolist()})),
     }
-    metrics_path.write_text(json.dumps(metrics_payload, indent=2), encoding="utf-8")
+    metrics_path.write_text(json.dumps(metrics_payload, indent=2, default=str), encoding="utf-8")
 
     print("Test metrics:")
     for key, value in test_metrics.items():

@@ -14,5 +14,6 @@
 - All logs must be written in English.
 
 ## Other
+- You can freely install libraries using pip3.
 - Please respond in language same as given user prompt.
 

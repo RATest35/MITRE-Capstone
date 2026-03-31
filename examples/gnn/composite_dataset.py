@@ -66,8 +66,8 @@ def _parse_ip_features(node_id: str) -> list[float]:
     return octets + [is_private, is_public, is_ten, is_172, is_192]
 
 
-def _group_key(node_id: str) -> str:
-    """Return a /24-like grouping key for one node."""
+def _group_key(node_id: str, prefix_len: int) -> str:
+    """Return an IPv4 prefix grouping key."""
     try:
         parsed = ip_address(node_id)
     except ValueError:
@@ -77,7 +77,12 @@ def _group_key(node_id: str) -> str:
         return node_id
 
     octets = node_id.split(".")
-    return ".".join(octets[:3])
+    return ".".join(octets[:prefix_len])
+
+
+def build_group_keys(node_ids: list[str], prefix_len: int) -> list[str]:
+    """Build group keys for all nodes."""
+    return [_group_key(node_id, prefix_len) for node_id in node_ids]
 
 
 def _sort_neighbors(neighbors: list[list[tuple[int, float]]]) -> None:
@@ -86,10 +91,125 @@ def _sort_neighbors(neighbors: list[list[tuple[int, float]]]) -> None:
         values.sort(key=lambda item: item[1], reverse=True)
 
 
+def _quantile(values: list[float], q: float) -> float:
+    """Return one quantile from a float list."""
+    if not values:
+        return 0.0
+    return float(np.quantile(np.asarray(values, dtype=np.float64), q))
+
+
+def _log_summary(values: list[float]) -> list[float]:
+    """Summarize a float list with log-scaled stats."""
+    if not values:
+        return [0.0, 0.0, 0.0, 0.0]
+
+    total = float(sum(values))
+    mean = total / float(len(values))
+    maximum = float(max(values))
+    upper_quartile = _quantile(values, 0.75)
+    return [
+        math.log1p(total),
+        math.log1p(mean),
+        math.log1p(maximum),
+        math.log1p(upper_quartile),
+    ]
+
+
+def _raw_summary(values: list[float]) -> list[float]:
+    """Summarize a float list with raw stats."""
+    if not values:
+        return [0.0, 0.0, 0.0]
+
+    mean = float(sum(values)) / float(len(values))
+    maximum = float(max(values))
+    upper_quartile = _quantile(values, 0.75)
+    return [
+        math.log1p(mean),
+        math.log1p(maximum),
+        math.log1p(upper_quartile),
+    ]
+
+
+def _two_hop_counts(
+    neighbor_indices: list[int],
+    adjacency: list[list[tuple[int, float]]],
+) -> set[int]:
+    """Collect two-hop neighbor indices."""
+    results: set[int] = set()
+    for neighbor_index in neighbor_indices:
+        results.update(index for index, _ in adjacency[neighbor_index])
+    return results
+
+
+def _extended_feature_row(
+    index: int,
+    in_neighbors: list[list[tuple[int, float]]],
+    out_neighbors: list[list[tuple[int, float]]],
+) -> list[float]:
+    """Build extended structural features for one node."""
+    incoming = in_neighbors[index]
+    outgoing = out_neighbors[index]
+    in_neighbor_indices = [neighbor_index for neighbor_index, _ in incoming]
+    out_neighbor_indices = [neighbor_index for neighbor_index, _ in outgoing]
+    incoming_flows = [flow for _, flow in incoming]
+    outgoing_flows = [flow for _, flow in outgoing]
+
+    in_neighbor_total_degree = [
+        float(len(in_neighbors[neighbor_index]) + len(out_neighbors[neighbor_index]))
+        for neighbor_index in in_neighbor_indices
+    ]
+    out_neighbor_total_degree = [
+        float(len(in_neighbors[neighbor_index]) + len(out_neighbors[neighbor_index]))
+        for neighbor_index in out_neighbor_indices
+    ]
+    in_neighbor_total_flow = [
+        float(sum(flow for _, flow in in_neighbors[neighbor_index]) + sum(flow for _, flow in out_neighbors[neighbor_index]))
+        for neighbor_index in in_neighbor_indices
+    ]
+    out_neighbor_total_flow = [
+        float(sum(flow for _, flow in in_neighbors[neighbor_index]) + sum(flow for _, flow in out_neighbors[neighbor_index]))
+        for neighbor_index in out_neighbor_indices
+    ]
+
+    in_two_hop = _two_hop_counts(in_neighbor_indices, in_neighbors)
+    out_two_hop = _two_hop_counts(out_neighbor_indices, out_neighbors)
+    in_two_hop.discard(index)
+    out_two_hop.discard(index)
+    union_two_hop = in_two_hop | out_two_hop
+    overlap_two_hop = in_two_hop & out_two_hop
+
+    in_degree = float(len(incoming))
+    out_degree = float(len(outgoing))
+    in_flow = float(sum(incoming_flows))
+    out_flow = float(sum(outgoing_flows))
+    in_neighbor_degree_mean = float(sum(in_neighbor_total_degree)) / max(float(len(in_neighbor_total_degree)), 1.0)
+    out_neighbor_degree_mean = float(sum(out_neighbor_total_degree)) / max(float(len(out_neighbor_total_degree)), 1.0)
+    in_neighbor_flow_mean = float(sum(in_neighbor_total_flow)) / max(float(len(in_neighbor_total_flow)), 1.0)
+    out_neighbor_flow_mean = float(sum(out_neighbor_total_flow)) / max(float(len(out_neighbor_total_flow)), 1.0)
+
+    return [
+        *_log_summary(incoming_flows),
+        *_log_summary(outgoing_flows),
+        *_raw_summary(in_neighbor_total_degree),
+        *_raw_summary(out_neighbor_total_degree),
+        *_log_summary(in_neighbor_total_flow)[1:],
+        *_log_summary(out_neighbor_total_flow)[1:],
+        math.log1p(float(len(in_two_hop))),
+        math.log1p(float(len(out_two_hop))),
+        math.log1p(float(len(union_two_hop))),
+        math.log1p(float(len(overlap_two_hop))),
+        math.log1p(in_degree / max(in_neighbor_degree_mean, EPSILON)),
+        math.log1p(out_degree / max(out_neighbor_degree_mean, EPSILON)),
+        math.log1p(in_flow / max(in_neighbor_flow_mean, EPSILON)),
+        math.log1p(out_flow / max(out_neighbor_flow_mean, EPSILON)),
+    ]
+
+
 def _build_feature_matrix(
     node_ids: list[str],
     in_neighbors: list[list[tuple[int, float]]],
     out_neighbors: list[list[tuple[int, float]]],
+    feature_set: str,
 ) -> torch.Tensor:
     """Build node-level features from graph structure."""
     rows: list[list[float]] = []
@@ -131,19 +251,41 @@ def _build_feature_matrix(
             outbound_share,
         ]
         row.extend(_parse_ip_features(node_id))
+        if feature_set == "extended":
+            row.extend(_extended_feature_row(index, in_neighbors, out_neighbors))
         rows.append(row)
 
     return torch.tensor(rows, dtype=torch.float32)
 
 
-def load_graph_dataset(graphml_path: Path) -> GraphDataset:
+def _build_sample_weights(raw_targets: torch.Tensor, mode: str, scale: float) -> torch.Tensor:
+    """Build sample weights from target rank."""
+    normalized_rank = torch.argsort(torch.argsort(raw_targets)).float() / max(len(raw_targets) - 1, 1)
+    if mode == "linear":
+        factor = normalized_rank
+    elif mode == "sqrt":
+        factor = normalized_rank.sqrt()
+    elif mode == "quadratic":
+        factor = normalized_rank.square()
+    else:
+        raise ValueError(f"Unsupported weight mode: {mode}")
+    return 1.0 + scale * factor
+
+
+def load_graph_dataset(
+    graphml_path: Path,
+    feature_set: str,
+    weight_mode: str,
+    weight_scale: float,
+    split_prefix_len: int,
+) -> GraphDataset:
     """Load a GraphML file and build graph tensors."""
     graph = nx.read_graphml(graphml_path)
     directed_graph = nx.DiGraph(graph)
 
     node_ids = list(directed_graph.nodes())
     node_id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
-    group_keys = [_group_key(node_id) for node_id in node_ids]
+    group_keys = build_group_keys(node_ids, split_prefix_len)
 
     in_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
     out_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
@@ -162,11 +304,10 @@ def load_graph_dataset(graphml_path: Path) -> GraphDataset:
     _sort_neighbors(in_neighbors)
     _sort_neighbors(out_neighbors)
 
-    features = _build_feature_matrix(node_ids, in_neighbors, out_neighbors)
+    features = _build_feature_matrix(node_ids, in_neighbors, out_neighbors, feature_set)
     raw_target_tensor = torch.tensor(raw_targets, dtype=torch.float32)
     targets = torch.log1p(raw_target_tensor)
-    rank_order = torch.argsort(torch.argsort(raw_target_tensor))
-    sample_weights = 1.0 + 4.0 * rank_order.float() / max(len(node_ids) - 1, 1)
+    sample_weights = _build_sample_weights(raw_target_tensor, weight_mode, weight_scale)
 
     return GraphDataset(
         node_ids=node_ids,
