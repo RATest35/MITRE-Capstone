@@ -14,7 +14,7 @@ from torch.optim import AdamW
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-from composite_dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, stratified_score_split
+from composite_dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_split
 from composite_metrics import regression_metrics
 from composite_model import CompositeScoreGNN
 
@@ -40,6 +40,7 @@ class TrainConfig:
     max_out_neighbors: int
     num_workers: int
     prefetch_factor: int
+    selection_metric: str
     train_seed: int
     patience: int
     device: str
@@ -65,6 +66,7 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--max-out-neighbors", type=int, default=20)
     parser.add_argument("--num-workers", type=int, default=max((os.cpu_count() or 1) - 2, 1))
     parser.add_argument("--prefetch-factor", type=int, default=4)
+    parser.add_argument("--selection-metric", type=str, default="ndcg_1pct")
     parser.add_argument("--train-seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", type=str, default="cpu")
@@ -87,6 +89,7 @@ def parse_args() -> TrainConfig:
         max_out_neighbors=arguments.max_out_neighbors,
         num_workers=arguments.num_workers,
         prefetch_factor=arguments.prefetch_factor,
+        selection_metric=arguments.selection_metric,
         train_seed=arguments.train_seed,
         patience=arguments.patience,
         device=arguments.device,
@@ -115,6 +118,7 @@ def build_dataloaders(
     train_dataset = RootedSubgraphDataset(
         graph_dataset=dataset,
         node_indices=train_indices,
+        allowed_node_indices=train_indices,
         sampler_config=sampler_config,
         training=True,
         seed=config.train_seed,
@@ -122,6 +126,7 @@ def build_dataloaders(
     val_dataset = RootedSubgraphDataset(
         graph_dataset=dataset,
         node_indices=val_indices,
+        allowed_node_indices=val_indices,
         sampler_config=sampler_config,
         training=False,
         seed=config.train_seed,
@@ -129,6 +134,7 @@ def build_dataloaders(
     test_dataset = RootedSubgraphDataset(
         graph_dataset=dataset,
         node_indices=test_indices,
+        allowed_node_indices=test_indices,
         sampler_config=sampler_config,
         training=False,
         seed=config.train_seed,
@@ -151,7 +157,6 @@ def train_epoch(
     model: CompositeScoreGNN,
     loader: DataLoader,
     optimizer: AdamW,
-    criterion: nn.Module,
     device: torch.device,
 ) -> float:
     """Run one training epoch."""
@@ -162,7 +167,11 @@ def train_epoch(
         batch = batch.to(device)
         optimizer.zero_grad(set_to_none=True)
         predictions = model(batch.x, batch.edge_index, batch.edge_weight)
-        loss = criterion(predictions[batch.seed_mask], batch.y[batch.seed_mask])
+        seed_predictions = predictions[batch.seed_mask]
+        seed_targets = batch.y[batch.seed_mask]
+        seed_weights = batch.y_weight[batch.seed_mask]
+        per_sample_loss = nn.functional.huber_loss(seed_predictions, seed_targets, reduction="none")
+        loss = (per_sample_loss * seed_weights).sum() / seed_weights.sum().clamp_min(1e-6)
         loss.backward()
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
@@ -173,7 +182,6 @@ def train_epoch(
 def evaluate(
     model: CompositeScoreGNN,
     loader: DataLoader,
-    criterion: nn.Module,
     device: torch.device,
 ) -> tuple[float, dict[str, float], list[dict[str, float]]]:
     """Evaluate the model on one split."""
@@ -189,7 +197,9 @@ def evaluate(
             predictions = model(batch.x, batch.edge_index, batch.edge_weight)
             seed_predictions = predictions[batch.seed_mask]
             seed_targets = batch.y[batch.seed_mask]
-            loss = criterion(seed_predictions, seed_targets)
+            seed_weights = batch.y_weight[batch.seed_mask]
+            per_sample_loss = nn.functional.huber_loss(seed_predictions, seed_targets, reduction="none")
+            loss = (per_sample_loss * seed_weights).sum() / seed_weights.sum().clamp_min(1e-6)
             losses.append(float(loss.detach().cpu()))
 
             actual_logs.extend(seed_targets.detach().cpu().numpy().tolist())
@@ -249,7 +259,8 @@ def main() -> None:
     device = torch.device(config.device)
 
     dataset = load_graph_dataset(config.graphml_path)
-    train_indices, val_indices, test_indices = stratified_score_split(
+    train_indices, val_indices, test_indices = subnet_group_split(
+        group_keys=dataset.group_keys,
         targets=dataset.targets,
         train_ratio=config.train_ratio,
         val_ratio=config.val_ratio,
@@ -260,9 +271,11 @@ def main() -> None:
     dataset = GraphDataset(
         node_ids=dataset.node_ids,
         node_id_to_index=dataset.node_id_to_index,
+        group_keys=dataset.group_keys,
         features=standardized_features,
         targets=dataset.targets,
         raw_targets=dataset.raw_targets,
+        sample_weights=dataset.sample_weights,
         in_neighbors=dataset.in_neighbors,
         out_neighbors=dataset.out_neighbors,
     )
@@ -282,16 +295,16 @@ def main() -> None:
         dropout=config.dropout,
     ).to(device)
     optimizer = AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
-    criterion = nn.HuberLoss()
 
     best_state: dict[str, torch.Tensor] | None = None
-    best_val_loss = float("inf")
+    best_val_score = float("-inf")
     stale_epochs = 0
     history: list[dict[str, float]] = []
 
     for epoch in range(1, config.epochs + 1):
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
-        val_loss, val_metrics, _ = evaluate(model, val_loader, criterion, device)
+        train_loss = train_epoch(model, train_loader, optimizer, device)
+        val_loss, val_metrics, _ = evaluate(model, val_loader, device)
+        val_score = float(val_metrics[config.selection_metric])
         history.append(
             {
                 "epoch": float(epoch),
@@ -305,11 +318,11 @@ def main() -> None:
             f"Epoch {epoch:03d} | "
             f"train_loss={train_loss:.6f} | "
             f"val_loss={val_loss:.6f} | "
-            f"val_spearman={val_metrics['spearman']:.4f}"
+            f"{config.selection_metric}={val_score:.4f}"
         )
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if val_score > best_val_score:
+            best_val_score = val_score
             stale_epochs = 0
             best_state = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
             continue
@@ -323,7 +336,7 @@ def main() -> None:
         raise RuntimeError("Training did not produce a valid model state.")
 
     model.load_state_dict(best_state)
-    test_loss, test_metrics, test_rows = evaluate(model, test_loader, criterion, device)
+    test_loss, test_metrics, test_rows = evaluate(model, test_loader, device)
 
     model_path = config.output_dir / "composite_score_gnn.pt"
     predictions_path = config.output_dir / "composite_score_predictions.csv"
@@ -347,6 +360,9 @@ def main() -> None:
         "train_size": int(len(train_indices)),
         "val_size": int(len(val_indices)),
         "test_size": int(len(test_indices)),
+        "train_group_count": int(len({dataset.group_keys[index] for index in train_indices.tolist()})),
+        "val_group_count": int(len({dataset.group_keys[index] for index in val_indices.tolist()})),
+        "test_group_count": int(len({dataset.group_keys[index] for index in test_indices.tolist()})),
     }
     metrics_path.write_text(json.dumps(metrics_payload, indent=2), encoding="utf-8")
 

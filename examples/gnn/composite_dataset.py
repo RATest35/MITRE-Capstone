@@ -22,9 +22,11 @@ class GraphDataset:
 
     node_ids: list[str]
     node_id_to_index: dict[str, int]
+    group_keys: list[str]
     features: torch.Tensor
     targets: torch.Tensor
     raw_targets: torch.Tensor
+    sample_weights: torch.Tensor
     in_neighbors: list[list[tuple[int, float]]]
     out_neighbors: list[list[tuple[int, float]]]
 
@@ -62,6 +64,20 @@ def _parse_ip_features(node_id: str) -> list[float]:
     is_172 = float(172 == int(node_id.split(".")[0]) and 16 <= int(node_id.split(".")[1]) <= 31)
     is_192 = float(node_id.startswith("192.168."))
     return octets + [is_private, is_public, is_ten, is_172, is_192]
+
+
+def _group_key(node_id: str) -> str:
+    """Return a /24-like grouping key for one node."""
+    try:
+        parsed = ip_address(node_id)
+    except ValueError:
+        return node_id
+
+    if parsed.version != 4:
+        return node_id
+
+    octets = node_id.split(".")
+    return ".".join(octets[:3])
 
 
 def _sort_neighbors(neighbors: list[list[tuple[int, float]]]) -> None:
@@ -127,6 +143,7 @@ def load_graph_dataset(graphml_path: Path) -> GraphDataset:
 
     node_ids = list(directed_graph.nodes())
     node_id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
+    group_keys = [_group_key(node_id) for node_id in node_ids]
 
     in_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
     out_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
@@ -148,42 +165,72 @@ def load_graph_dataset(graphml_path: Path) -> GraphDataset:
     features = _build_feature_matrix(node_ids, in_neighbors, out_neighbors)
     raw_target_tensor = torch.tensor(raw_targets, dtype=torch.float32)
     targets = torch.log1p(raw_target_tensor)
+    rank_order = torch.argsort(torch.argsort(raw_target_tensor))
+    sample_weights = 1.0 + 4.0 * rank_order.float() / max(len(node_ids) - 1, 1)
 
     return GraphDataset(
         node_ids=node_ids,
         node_id_to_index=node_id_to_index,
+        group_keys=group_keys,
         features=features,
         targets=targets,
         raw_targets=raw_target_tensor,
+        sample_weights=sample_weights,
         in_neighbors=in_neighbors,
         out_neighbors=out_neighbors,
     )
 
 
-def stratified_score_split(
+def subnet_group_split(
+    group_keys: list[str],
     targets: torch.Tensor,
     train_ratio: float,
     val_ratio: float,
     seed: int,
-    bucket_size: int = 256,
+    bucket_size: int = 32,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Split nodes while preserving target distribution."""
-    values = targets.detach().cpu().numpy()
-    order = np.argsort(values)
+    """Split nodes by group while preserving score distribution."""
+    grouped_indices: dict[str, list[int]] = {}
+    for node_index, group_key in enumerate(group_keys):
+        grouped_indices.setdefault(group_key, []).append(node_index)
+
+    groups = list(grouped_indices)
+    group_scores = np.array(
+        [
+            float(targets[torch.as_tensor(grouped_indices[group_key], dtype=torch.long)].mean().item())
+            for group_key in groups
+        ],
+        dtype=np.float64,
+    )
+    order = np.argsort(group_scores)
     rng = np.random.default_rng(seed)
+
+    train_groups: set[str] = set()
+    val_groups: set[str] = set()
+    test_groups: set[str] = set()
+
+    ordered_groups = [groups[position] for position in order]
+    for start in range(0, len(ordered_groups), bucket_size):
+        bucket = ordered_groups[start:start + bucket_size].copy()
+        rng.shuffle(bucket)
+        train_end = int(len(bucket) * train_ratio)
+        val_end = train_end + int(len(bucket) * val_ratio)
+        train_groups.update(bucket[:train_end])
+        val_groups.update(bucket[train_end:val_end])
+        test_groups.update(bucket[val_end:])
 
     train_indices: list[int] = []
     val_indices: list[int] = []
     test_indices: list[int] = []
 
-    for start in range(0, len(order), bucket_size):
-        bucket = order[start:start + bucket_size].copy()
-        rng.shuffle(bucket)
-        train_end = int(len(bucket) * train_ratio)
-        val_end = train_end + int(len(bucket) * val_ratio)
-        train_indices.extend(bucket[:train_end].tolist())
-        val_indices.extend(bucket[train_end:val_end].tolist())
-        test_indices.extend(bucket[val_end:].tolist())
+    for group_key, group_node_indices in grouped_indices.items():
+        if group_key in train_groups:
+            train_indices.extend(group_node_indices)
+            continue
+        if group_key in val_groups:
+            val_indices.extend(group_node_indices)
+            continue
+        test_indices.extend(group_node_indices)
 
     return (
         np.array(train_indices, dtype=np.int64),
@@ -208,12 +255,15 @@ class RootedSubgraphDataset(Dataset[Data]):
         self,
         graph_dataset: GraphDataset,
         node_indices: np.ndarray,
+        allowed_node_indices: np.ndarray,
         sampler_config: SamplerConfig,
         training: bool,
         seed: int,
     ) -> None:
         self.graph_dataset = graph_dataset
         self.node_indices = node_indices
+        self.allowed_mask = np.zeros(len(graph_dataset.node_ids), dtype=np.bool_)
+        self.allowed_mask[allowed_node_indices] = True
         self.sampler_config = sampler_config
         self.training = training
         self.rng = np.random.default_rng(seed)
@@ -248,10 +298,12 @@ class RootedSubgraphDataset(Dataset[Data]):
         x = self.graph_dataset.features[torch.as_tensor(sampled_nodes, dtype=torch.long)]
         y = torch.zeros(len(sampled_nodes), dtype=torch.float32)
         raw_y = torch.zeros(len(sampled_nodes), dtype=torch.float32)
+        y_weight = torch.zeros(len(sampled_nodes), dtype=torch.float32)
         seed_mask = torch.zeros(len(sampled_nodes), dtype=torch.bool)
         seed_mask[0] = True
         y[0] = self.graph_dataset.targets[root_index]
         raw_y[0] = self.graph_dataset.raw_targets[root_index]
+        y_weight[0] = self.graph_dataset.sample_weights[root_index]
 
         return Data(
             x=x,
@@ -259,6 +311,7 @@ class RootedSubgraphDataset(Dataset[Data]):
             edge_weight=edge_weight,
             y=y,
             raw_y=raw_y,
+            y_weight=y_weight,
             seed_mask=seed_mask,
             root_node=torch.tensor([root_index], dtype=torch.long),
         )
@@ -303,14 +356,20 @@ class RootedSubgraphDataset(Dataset[Data]):
         if limit <= 0 or not neighbors:
             return iter(())
 
-        if len(neighbors) <= limit:
-            return (neighbor_index for neighbor_index, _ in neighbors)
+        allowed_neighbors = [
+            (neighbor_index, flow)
+            for neighbor_index, flow in neighbors
+            if self.allowed_mask[neighbor_index]
+        ]
+
+        if len(allowed_neighbors) <= limit:
+            return (neighbor_index for neighbor_index, _ in allowed_neighbors)
 
         if not self.training:
-            return (neighbor_index for neighbor_index, _ in neighbors[:limit])
+            return (neighbor_index for neighbor_index, _ in allowed_neighbors[:limit])
 
-        weights = np.array([max(flow, 0.0) + 1.0 for _, flow in neighbors], dtype=np.float64)
+        weights = np.array([max(flow, 0.0) + 1.0 for _, flow in allowed_neighbors], dtype=np.float64)
         probabilities = weights / weights.sum()
-        sampled_positions = self.rng.choice(len(neighbors), size=limit, replace=False, p=probabilities)
+        sampled_positions = self.rng.choice(len(allowed_neighbors), size=limit, replace=False, p=probabilities)
         sampled_positions.sort()
-        return (neighbors[position][0] for position in sampled_positions)
+        return (allowed_neighbors[position][0] for position in sampled_positions)
