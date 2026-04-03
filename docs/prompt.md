@@ -36,5 +36,7 @@
 9
 10
 
-1 / 5
-top_1pct_recall = 100%
+
+ 4/5 =80%
+
+top_50pct_recall = 100%
