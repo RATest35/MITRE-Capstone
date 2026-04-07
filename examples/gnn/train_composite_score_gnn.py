@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import sys
@@ -92,40 +91,10 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--train-seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", type=str, default="cpu")
-    arguments = parser.parse_args()
-    feature_groups = tuple(part.strip() for part in arguments.feature_groups.split(",") if part.strip()) or None
-    return TrainConfig(
-        graphml_path=arguments.graphml_path,
-        output_dir=arguments.output_dir,
-        hidden_dim=arguments.hidden_dim,
-        num_layers=arguments.num_layers,
-        dropout=arguments.dropout,
-        learning_rate=arguments.learning_rate,
-        weight_decay=arguments.weight_decay,
-        epochs=arguments.epochs,
-        batch_size=arguments.batch_size,
-        eval_batch_size=arguments.eval_batch_size,
-        train_ratio=arguments.train_ratio,
-        val_ratio=arguments.val_ratio,
-        num_hops=arguments.num_hops,
-        max_in_neighbors=arguments.max_in_neighbors,
-        max_out_neighbors=arguments.max_out_neighbors,
-        num_workers=arguments.num_workers,
-        prefetch_factor=arguments.prefetch_factor,
-        selection_metric=arguments.selection_metric,
-        feature_set=arguments.feature_set,
-        feature_groups=feature_groups,
-        group_by_prefix=arguments.group_by_prefix,
-        split_bucket_size=arguments.split_bucket_size,
-        weight_mode=arguments.weight_mode,
-        weight_scale=arguments.weight_scale,
-        ranking_loss_weight=arguments.ranking_loss_weight,
-        ranking_margin=arguments.ranking_margin,
-        ranking_pairs=arguments.ranking_pairs,
-        train_seed=arguments.train_seed,
-        patience=arguments.patience,
-        device=arguments.device,
-    )
+    arguments = vars(parser.parse_args())
+    feature_groups_text = arguments.pop("feature_groups")
+    arguments["feature_groups"] = tuple(part.strip() for part in feature_groups_text.split(",") if part.strip()) or None
+    return TrainConfig(**arguments)
 
 
 def set_seed(seed: int) -> None:
@@ -147,30 +116,6 @@ def build_dataloaders(
         max_in_neighbors=config.max_in_neighbors,
         max_out_neighbors=config.max_out_neighbors,
     )
-    train_dataset = RootedSubgraphDataset(
-        graph_dataset=dataset,
-        node_indices=train_indices,
-        allowed_node_indices=train_indices,
-        sampler_config=sampler_config,
-        training=True,
-        seed=config.train_seed,
-    )
-    val_dataset = RootedSubgraphDataset(
-        graph_dataset=dataset,
-        node_indices=val_indices,
-        allowed_node_indices=val_indices,
-        sampler_config=sampler_config,
-        training=False,
-        seed=config.train_seed,
-    )
-    test_dataset = RootedSubgraphDataset(
-        graph_dataset=dataset,
-        node_indices=test_indices,
-        allowed_node_indices=test_indices,
-        sampler_config=sampler_config,
-        training=False,
-        seed=config.train_seed,
-    )
     loader_kwargs: dict[str, object] = {
         "num_workers": config.num_workers,
         "persistent_workers": config.num_workers > 0,
@@ -178,11 +123,44 @@ def build_dataloaders(
     if config.num_workers > 0:
         loader_kwargs["prefetch_factor"] = config.prefetch_factor
 
+    def create_loader(node_indices: np.ndarray, batch_size: int, shuffle: bool, training: bool) -> DataLoader:
+        dataset_split = RootedSubgraphDataset(
+            graph_dataset=dataset,
+            node_indices=node_indices,
+            allowed_node_indices=node_indices,
+            sampler_config=sampler_config,
+            training=training,
+            seed=config.train_seed,
+        )
+        return DataLoader(dataset_split, batch_size=batch_size, shuffle=shuffle, **loader_kwargs)
+
     return (
-        DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, **loader_kwargs),
-        DataLoader(val_dataset, batch_size=config.eval_batch_size, shuffle=False, **loader_kwargs),
-        DataLoader(test_dataset, batch_size=config.eval_batch_size, shuffle=False, **loader_kwargs),
+        create_loader(train_indices, config.batch_size, True, True),
+        create_loader(val_indices, config.eval_batch_size, False, False),
+        create_loader(test_indices, config.eval_batch_size, False, False),
     )
+
+
+def seed_predictions_and_targets(
+    batch: torch.Tensor,
+    predictions: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Extract seed predictions, targets, and weights."""
+    return (
+        predictions[batch.seed_mask],
+        batch.y[batch.seed_mask],
+        batch.y_weight[batch.seed_mask],
+    )
+
+
+def weighted_huber_loss(
+    predictions: torch.Tensor,
+    targets: torch.Tensor,
+    weights: torch.Tensor,
+) -> torch.Tensor:
+    """Compute weighted Huber loss."""
+    per_sample_loss = nn.functional.huber_loss(predictions, targets, reduction="none")
+    return (per_sample_loss * weights).sum() / weights.sum().clamp_min(1e-6)
 
 
 def train_epoch(
@@ -200,11 +178,8 @@ def train_epoch(
         batch = batch.to(device)
         optimizer.zero_grad(set_to_none=True)
         predictions = model(batch.x, batch.edge_index, batch.edge_weight)
-        seed_predictions = predictions[batch.seed_mask]
-        seed_targets = batch.y[batch.seed_mask]
-        seed_weights = batch.y_weight[batch.seed_mask]
-        per_sample_loss = nn.functional.huber_loss(seed_predictions, seed_targets, reduction="none")
-        regression_loss = (per_sample_loss * seed_weights).sum() / seed_weights.sum().clamp_min(1e-6)
+        seed_predictions, seed_targets, seed_weights = seed_predictions_and_targets(batch, predictions)
+        regression_loss = weighted_huber_loss(seed_predictions, seed_targets, seed_weights)
         ranking_loss = pairwise_ranking_loss(
             seed_predictions,
             seed_targets,
@@ -236,11 +211,8 @@ def evaluate(
         for batch in tqdm(loader, desc="Eval", leave=False, disable=not PROGRESS_ENABLED):
             batch = batch.to(device)
             predictions = model(batch.x, batch.edge_index, batch.edge_weight)
-            seed_predictions = predictions[batch.seed_mask]
-            seed_targets = batch.y[batch.seed_mask]
-            seed_weights = batch.y_weight[batch.seed_mask]
-            per_sample_loss = nn.functional.huber_loss(seed_predictions, seed_targets, reduction="none")
-            loss = (per_sample_loss * seed_weights).sum() / seed_weights.sum().clamp_min(1e-6)
+            seed_predictions, seed_targets, seed_weights = seed_predictions_and_targets(batch, predictions)
+            loss = weighted_huber_loss(seed_predictions, seed_targets, seed_weights)
             losses.append(float(loss.detach().cpu()))
 
             actual_logs.extend(seed_targets.detach().cpu().numpy().tolist())
@@ -294,10 +266,86 @@ def pairwise_ranking_loss(
 def serializable_config(config: TrainConfig) -> dict[str, object]:
     """Convert config values into JSON-safe objects."""
     values = asdict(config)
-    return {
-        key: str(value) if isinstance(value, Path) else value
-        for key, value in values.items()
+    return {key: str(value) if isinstance(value, Path) else value for key, value in values.items()}
+
+
+def prepare_dataset(
+    config: TrainConfig,
+) -> tuple[GraphDataset, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Load, split, and standardize the dataset."""
+    raw_dataset = load_graph_dataset(
+        graphml_path=config.graphml_path,
+        feature_set=config.feature_set,
+        feature_groups=config.feature_groups,
+        weight_mode=config.weight_mode,
+        weight_scale=config.weight_scale,
+        split_prefix_len=config.group_by_prefix // 8,
+    )
+    train_indices, val_indices, test_indices = subnet_group_split(
+        group_keys=raw_dataset.group_keys,
+        targets=raw_dataset.targets,
+        train_ratio=config.train_ratio,
+        val_ratio=config.val_ratio,
+        seed=config.train_seed,
+        bucket_size=config.split_bucket_size,
+    )
+    standardized_features, feature_mean, feature_std = standardize_features(raw_dataset.features, train_indices)
+    dataset = GraphDataset(
+        node_ids=raw_dataset.node_ids,
+        node_id_to_index=raw_dataset.node_id_to_index,
+        group_keys=raw_dataset.group_keys,
+        features=standardized_features,
+        targets=raw_dataset.targets,
+        raw_targets=raw_dataset.raw_targets,
+        sample_weights=raw_dataset.sample_weights,
+        in_neighbors=raw_dataset.in_neighbors,
+        out_neighbors=raw_dataset.out_neighbors,
+    )
+    return dataset, dataset.group_keys, train_indices, val_indices, test_indices, feature_mean, feature_std
+
+
+def save_outputs(
+    config: TrainConfig,
+    model: CompositeScoreGNN,
+    feature_mean: np.ndarray,
+    feature_std: np.ndarray,
+    test_loss: float,
+    test_metrics: dict[str, float],
+    history: list[dict[str, float]],
+    group_keys: np.ndarray,
+    train_indices: np.ndarray,
+    val_indices: np.ndarray,
+    test_indices: np.ndarray,
+) -> tuple[Path, Path, Path]:
+    """Save model and metrics artifacts."""
+    model_path = config.output_dir / "composite_score_gnn.pt"
+    predictions_path = config.output_dir / "composite_score_predictions.csv"
+    metrics_path = config.output_dir / "metrics.json"
+
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "feature_mean": feature_mean,
+            "feature_std": feature_std,
+            "config": asdict(config),
+        },
+        model_path,
+    )
+
+    metrics_payload = {
+        "config": serializable_config(config),
+        "test_loss": test_loss,
+        "test_metrics": test_metrics,
+        "history": history,
+        "train_size": int(len(train_indices)),
+        "val_size": int(len(val_indices)),
+        "test_size": int(len(test_indices)),
+        "train_group_count": int(len({group_keys[index] for index in train_indices.tolist()})),
+        "val_group_count": int(len({group_keys[index] for index in val_indices.tolist()})),
+        "test_group_count": int(len({group_keys[index] for index in test_indices.tolist()})),
     }
+    metrics_path.write_text(json.dumps(metrics_payload, indent=2, default=str), encoding="utf-8")
+    return model_path, predictions_path, metrics_path
 
 
 def main() -> None:
@@ -307,36 +355,7 @@ def main() -> None:
     set_seed(config.train_seed)
     device = torch.device(config.device)
 
-    dataset = load_graph_dataset(
-        graphml_path=config.graphml_path,
-        feature_set=config.feature_set,
-        feature_groups=config.feature_groups,
-        weight_mode=config.weight_mode,
-        weight_scale=config.weight_scale,
-        split_prefix_len=config.group_by_prefix // 8,
-    )
-    group_keys = dataset.group_keys
-    train_indices, val_indices, test_indices = subnet_group_split(
-        group_keys=group_keys,
-        targets=dataset.targets,
-        train_ratio=config.train_ratio,
-        val_ratio=config.val_ratio,
-        seed=config.train_seed,
-        bucket_size=config.split_bucket_size,
-    )
-
-    standardized_features, feature_mean, feature_std = standardize_features(dataset.features, train_indices)
-    dataset = GraphDataset(
-        node_ids=dataset.node_ids,
-        node_id_to_index=dataset.node_id_to_index,
-        group_keys=group_keys,
-        features=standardized_features,
-        targets=dataset.targets,
-        raw_targets=dataset.raw_targets,
-        sample_weights=dataset.sample_weights,
-        in_neighbors=dataset.in_neighbors,
-        out_neighbors=dataset.out_neighbors,
-    )
+    dataset, group_keys, train_indices, val_indices, test_indices, feature_mean, feature_std = prepare_dataset(config)
 
     train_loader, val_loader, test_loader = build_dataloaders(
         dataset=dataset,
@@ -394,35 +413,20 @@ def main() -> None:
         raise RuntimeError("Training did not produce a valid model state.")
 
     model.load_state_dict(best_state)
-    test_loss, test_metrics, test_rows = evaluate(model, test_loader, device)
-
-    model_path = config.output_dir / "composite_score_gnn.pt"
-    predictions_path = config.output_dir / "composite_score_predictions.csv"
-    metrics_path = config.output_dir / "metrics.json"
-
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "feature_mean": feature_mean,
-            "feature_std": feature_std,
-            "config": asdict(config),
-        },
-        model_path,
+    test_loss, test_metrics, _ = evaluate(model, test_loader, device)
+    model_path, predictions_path, metrics_path = save_outputs(
+        config=config,
+        model=model,
+        feature_mean=feature_mean,
+        feature_std=feature_std,
+        test_loss=test_loss,
+        test_metrics=test_metrics,
+        history=history,
+        group_keys=group_keys,
+        train_indices=train_indices,
+        val_indices=val_indices,
+        test_indices=test_indices,
     )
-
-    metrics_payload = {
-        "config": serializable_config(config),
-        "test_loss": test_loss,
-        "test_metrics": test_metrics,
-        "history": history,
-        "train_size": int(len(train_indices)),
-        "val_size": int(len(val_indices)),
-        "test_size": int(len(test_indices)),
-        "train_group_count": int(len({group_keys[index] for index in train_indices.tolist()})),
-        "val_group_count": int(len({group_keys[index] for index in val_indices.tolist()})),
-        "test_group_count": int(len({group_keys[index] for index in test_indices.tolist()})),
-    }
-    metrics_path.write_text(json.dumps(metrics_payload, indent=2, default=str), encoding="utf-8")
 
     print("Test metrics:")
     for key, value in test_metrics.items():
