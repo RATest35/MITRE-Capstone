@@ -1,4 +1,12 @@
 ## Coding Style
+- For Python, comments must be written for each processing block in the following format:
+
+    # ---------------------------------------------------------
+    # Comment here in English (up to 3 lines)
+    # ---------------------------------------------------------
+    Some code ...
+
+- Do NOT write doc string
 - Follow single responsible principal when you write code, create files and directries. BUT, do NOT split code to too many functions.
 - Implement code according to the Single Responsibility Principle.
 - Write short docstrings.
