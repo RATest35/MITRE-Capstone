@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num-hops", type=int, default=1)
     parser.add_argument("--max-in-neighbors", type=int, default=32)
     parser.add_argument("--max-out-neighbors", type=int, default=32)
