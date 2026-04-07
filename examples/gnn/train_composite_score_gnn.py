@@ -95,6 +95,7 @@ def parse_args() -> TrainConfig:
     arguments["feature_groups"] = tuple(part.strip() for part in feature_groups_text.split(",") if part.strip()) or None
     return TrainConfig(**arguments)
 
+
 def build_dataloaders(
     dataset: GraphDataset,
     train_indices: np.ndarray,
@@ -133,26 +134,19 @@ def build_dataloaders(
     )
 
 
-def seed_predictions_and_targets(
-    batch: torch.Tensor,
-    predictions: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Extract seed predictions, targets, and weights."""
-    return (
-        predictions[batch.seed_mask],
-        batch.y[batch.seed_mask],
-        batch.y_weight[batch.seed_mask],
-    )
-
-
-def weighted_huber_loss(
-    predictions: torch.Tensor,
-    targets: torch.Tensor,
-    weights: torch.Tensor,
-) -> torch.Tensor:
-    """Compute weighted Huber loss."""
-    per_sample_loss = nn.functional.huber_loss(predictions, targets, reduction="none")
-    return (per_sample_loss * weights).sum() / weights.sum().clamp_min(1e-6)
+def seed_batch_outputs(
+    model: CompositeScoreGNN,
+    batch: object,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Return seed predictions, targets, weights, and regression loss."""
+    predictions = model(batch.x, batch.edge_index, batch.edge_weight)
+    seed_mask = batch.seed_mask
+    seed_predictions = predictions[seed_mask]
+    seed_targets = batch.y[seed_mask]
+    seed_weights = batch.y_weight[seed_mask]
+    per_sample_loss = nn.functional.huber_loss(seed_predictions, seed_targets, reduction="none")
+    regression_loss = (per_sample_loss * seed_weights).sum() / seed_weights.sum().clamp_min(1e-6)
+    return seed_predictions, seed_targets, seed_weights, regression_loss
 
 
 def train_epoch(
@@ -169,9 +163,7 @@ def train_epoch(
     for batch in tqdm(loader, desc="Train", leave=False, disable=not PROGRESS_ENABLED):
         batch = batch.to(device)
         optimizer.zero_grad(set_to_none=True)
-        predictions = model(batch.x, batch.edge_index, batch.edge_weight)
-        seed_predictions, seed_targets, seed_weights = seed_predictions_and_targets(batch, predictions)
-        regression_loss = weighted_huber_loss(seed_predictions, seed_targets, seed_weights)
+        seed_predictions, seed_targets, seed_weights, regression_loss = seed_batch_outputs(model, batch)
         ranking_loss = pairwise_ranking_loss(
             seed_predictions,
             seed_targets,
@@ -191,40 +183,25 @@ def evaluate(
     model: CompositeScoreGNN,
     loader: DataLoader,
     device: torch.device,
-) -> tuple[float, dict[str, float], list[dict[str, float]]]:
+) -> tuple[float, dict[str, float]]:
     """Evaluate the model on one split."""
     model.eval()
     losses: list[float] = []
     actual_logs: list[float] = []
     predicted_logs: list[float] = []
-    rows: list[dict[str, float]] = []
 
     with torch.no_grad():
         for batch in tqdm(loader, desc="Eval", leave=False, disable=not PROGRESS_ENABLED):
             batch = batch.to(device)
-            predictions = model(batch.x, batch.edge_index, batch.edge_weight)
-            seed_predictions, seed_targets, seed_weights = seed_predictions_and_targets(batch, predictions)
-            loss = weighted_huber_loss(seed_predictions, seed_targets, seed_weights)
-            losses.append(float(loss.detach().cpu()))
+            seed_predictions, seed_targets, _, regression_loss = seed_batch_outputs(model, batch)
+            losses.append(float(regression_loss.detach().cpu()))
 
             actual_logs.extend(seed_targets.detach().cpu().numpy().tolist())
             predicted_logs.extend(seed_predictions.detach().cpu().numpy().tolist())
 
-            root_indices = batch.root_node.detach().cpu().numpy().tolist()
-            for root_index, actual_log, predicted_log in zip(root_indices, seed_targets.cpu().numpy(), seed_predictions.cpu().numpy()):
-                rows.append(
-                    {
-                        "root_index": int(root_index),
-                        "actual_log_composite_score": float(actual_log),
-                        "predicted_log_composite_score": float(predicted_log),
-                        "actual_composite_score": float(np.expm1(actual_log)),
-                        "predicted_composite_score": float(np.expm1(predicted_log)),
-                    }
-                )
-
     metrics = regression_metrics(np.array(actual_logs), np.array(predicted_logs))
     mean_loss = float(np.mean(losses)) if losses else 0.0
-    return mean_loss, metrics, rows
+    return mean_loss, metrics
 
 
 def pairwise_ranking_loss(
@@ -322,7 +299,7 @@ def main() -> None:
 
     for epoch in range(1, config.epochs + 1):
         train_loss = train_epoch(model, train_loader, optimizer, device, config)
-        val_loss, val_metrics, _ = evaluate(model, val_loader, device)
+        val_loss, val_metrics = evaluate(model, val_loader, device)
         val_score = float(val_metrics[config.selection_metric])
 
         print(
@@ -336,18 +313,17 @@ def main() -> None:
             best_val_score = val_score
             stale_epochs = 0
             best_state = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
-            continue
-
-        stale_epochs += 1
-        if stale_epochs >= config.patience:
-            print(f"Early stopping at epoch {epoch}.")
-            break
+        else:
+            stale_epochs += 1
+            if stale_epochs >= config.patience:
+                print(f"Early stopping at epoch {epoch}.")
+                break
 
     if best_state is None:
         raise RuntimeError("Training did not produce a valid model state.")
 
     model.load_state_dict(best_state)
-    _, test_metrics, _ = evaluate(model, test_loader, device)
+    _, test_metrics = evaluate(model, test_loader, device)
     model_path = config.output_dir / "composite_score_gnn.pt"
     torch.save(
         {
