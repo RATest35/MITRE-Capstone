@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--num-hops", type=int, default=2)
@@ -138,6 +139,7 @@ def main() -> None:
     optimizer = Adam(model.parameters(), lr=args.lr)
     best_val_loss = float("inf")
     best_state: dict[str, torch.Tensor] | None = None
+    patience_count = 0
 
     for epoch in range(1, args.epochs + 1):
         train_loss = run_epoch(model, train_loader, optimizer, device)
@@ -147,6 +149,13 @@ def main() -> None:
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_state = {key: value.detach().cpu() for key, value in model.state_dict().items()}
+            patience_count = 0
+            continue
+
+        patience_count += 1
+        if patience_count >= args.patience:
+            print(f"early_stop_epoch={epoch}")
+            break
 
     if best_state is not None:
         model.load_state_dict(best_state)
