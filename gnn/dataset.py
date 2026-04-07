@@ -231,7 +231,8 @@ class RootedSubgraphDataset(Dataset[Data]):
                     (self.graph_dataset.in_neighbors[node_index], self.sampler_config.max_in_neighbors),
                     (self.graph_dataset.out_neighbors[node_index], self.sampler_config.max_out_neighbors),
                 ):
-                    for neighbor_index, _ in neighbors[:limit]:
+                    picked_neighbors = neighbors if limit <= 0 else neighbors[:limit]
+                    for neighbor_index, _ in picked_neighbors:
                         if not self.allowed_mask[neighbor_index] or neighbor_index in seen:
                             continue
                         seen.add(neighbor_index)

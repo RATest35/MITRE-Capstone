@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 
 import numpy as np
@@ -20,16 +21,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--graphml-path", type=Path, default=Path("gnn/dataset/composite_risk.graphml"))
     parser.add_argument("--output-path", type=Path, default=Path("gnn/composite_score_gnn.pt"))
-    parser.add_argument("--hidden-dim", type=int, default=64)
-    parser.add_argument("--num-layers", type=int, default=2)
+    parser.add_argument("--hidden-dim", type=int, default=128)
+    parser.add_argument("--num-layers", type=int, default=4)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--num-hops", type=int, default=2)
-    parser.add_argument("--max-in-neighbors", type=int, default=20)
-    parser.add_argument("--max-out-neighbors", type=int, default=20)
+    parser.add_argument("--num-hops", type=int, default=1)
+    parser.add_argument("--max-in-neighbors", type=int, default=0)
+    parser.add_argument("--max-out-neighbors", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -115,6 +116,53 @@ def run_epoch(
 
 
 # ---------------------------------------------------------
+# Compute ranking metrics for top-risk node retrieval.
+# ---------------------------------------------------------
+def evaluate_ranking(
+    model: CompositeScoreGNN,
+    loader: DataLoader,
+    device: torch.device,
+) -> dict[str, float]:
+    predictions: list[torch.Tensor] = []
+    targets: list[torch.Tensor] = []
+
+    model.eval()
+    for batch in loader:
+        batch = batch.to(device)
+        outputs = model(batch.x, batch.edge_index, batch.edge_weight)
+        mask = batch.seed_mask
+        predictions.append(outputs[mask].detach().cpu())
+        targets.append(batch.y[mask].detach().cpu())
+
+    prediction_tensor = torch.cat(predictions)
+    target_tensor = torch.cat(targets)
+    node_count = int(target_tensor.numel())
+    top_1 = max(1, math.ceil(node_count * 0.01))
+    top_5 = max(1, math.ceil(node_count * 0.05))
+    predicted_order = torch.argsort(prediction_tensor, descending=True)
+    target_order = torch.argsort(target_tensor, descending=True)
+    predicted_top_1 = set(predicted_order[:top_1].tolist())
+    predicted_top_5 = set(predicted_order[:top_5].tolist())
+    target_top_1 = set(target_order[:top_1].tolist())
+    target_top_5 = set(target_order[:top_5].tolist())
+    dcg = sum(
+        float(target_tensor[int(predicted_order[i])].item()) / math.log2(i + 2)
+        for i in range(top_5)
+    )
+    ideal_dcg = sum(
+        float(target_tensor[int(target_order[i])].item()) / math.log2(i + 2)
+        for i in range(top_5)
+    )
+
+    return {
+        "precision_at_1": len(predicted_top_1 & target_top_1) / top_1,
+        "precision_at_5": len(predicted_top_5 & target_top_5) / top_5,
+        "recall_at_5": len(predicted_top_5 & target_top_5) / top_5,
+        "ndcg_at_5": dcg / max(ideal_dcg, 1e-12),
+    }
+
+
+# ---------------------------------------------------------
 # Train the model, track the best validation loss, and save it.
 # ---------------------------------------------------------
 def main() -> None:
@@ -137,7 +185,7 @@ def main() -> None:
         dropout=args.dropout,
     ).to(device)
     optimizer = Adam(model.parameters(), lr=args.lr)
-    best_val_loss = float("inf")
+    best_val_ndcg = float("-inf")
     best_state: dict[str, torch.Tensor] | None = None
     patience_count = 0
 
@@ -145,9 +193,14 @@ def main() -> None:
         train_loss = run_epoch(model, train_loader, optimizer, device)
         with torch.no_grad():
             val_loss = run_epoch(model, val_loader, None, device)
-        print(f"epoch={epoch} train_loss={train_loss:.6f} val_loss={val_loss:.6f}")
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+            val_metrics = evaluate_ranking(model, val_loader, device)
+        print(
+            f"epoch={epoch} train_loss={train_loss:.6f} val_loss={val_loss:.6f} "
+            f"p@1={val_metrics['precision_at_1']:.4f} p@5={val_metrics['precision_at_5']:.4f} "
+            f"r@5={val_metrics['recall_at_5']:.4f} ndcg@5={val_metrics['ndcg_at_5']:.4f}"
+        )
+        if val_metrics["ndcg_at_5"] > best_val_ndcg:
+            best_val_ndcg = val_metrics["ndcg_at_5"]
             best_state = {key: value.detach().cpu() for key, value in model.state_dict().items()}
             patience_count = 0
             continue
@@ -162,6 +215,7 @@ def main() -> None:
 
     with torch.no_grad():
         test_loss = run_epoch(model, test_loader, None, device)
+        test_metrics = evaluate_ranking(model, test_loader, device)
 
     args.output_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -171,10 +225,17 @@ def main() -> None:
             "feature_std": feature_std,
             "config": vars(args),
             "test_loss": test_loss,
+            "test_metrics": test_metrics,
         },
         args.output_path,
     )
     print(f"test_loss={test_loss:.6f}")
+    print(
+        f"test_p@1={test_metrics['precision_at_1']:.4f} "
+        f"test_p@5={test_metrics['precision_at_5']:.4f} "
+        f"test_r@5={test_metrics['recall_at_5']:.4f} "
+        f"test_ndcg@5={test_metrics['ndcg_at_5']:.4f}"
+    )
     print(f"saved={args.output_path}")
 
 
