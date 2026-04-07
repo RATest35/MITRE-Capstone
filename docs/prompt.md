@@ -1,42 +1,11 @@
+gnn/dataset/composite_risk.graphml のcomposite scoreを予測するモデルを作りたい。
 
+composite score は pagerank と weighted_betweenness から計算された値です。これらは使用せずに、他の特徴量から予測するようにして。
+また、importance も composite scoreと同じなので、使ってはいけません。
 
+モデルはgnn/model.pyに定義されています。まず、モデルの特徴量inputとして何を使用すべきかを、データセットを分析して教えて。
+なるべく最小限の特徴量で性能が出るようにしてほしい。
 
-1
-2
-3
-4
-5
-6
-7 2 highest
-8 1 highest
-9
-10
+node, edge, また、選択されたnodeの周辺ノードの情報も使用するようにしてください。
 
-
-8 1 highest
-7 2 highest
-1
-2
-3
-4
-5
-6
-9
-10
-
-
-8 1 highest
-1
-2
-3
-4
-5
-7 2 highest
-6
-9
-10
-
-
- 4/5 =80%
-
-top_50pct_recall = 100%
+まだコードを書かずに教えて。
