@@ -291,35 +291,6 @@ def pairwise_ranking_loss(
     return (pair_losses * pair_weights).sum() / pair_weights.sum().clamp_min(1e-6)
 
 
-def write_predictions(
-    rows: list[dict[str, float]],
-    node_ids: list[str],
-    path: Path,
-) -> None:
-    """Write prediction rows to CSV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = [
-        "node_id",
-        "actual_log_composite_score",
-        "predicted_log_composite_score",
-        "actual_composite_score",
-        "predicted_composite_score",
-    ]
-    with path.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {
-                    "node_id": node_ids[int(row["root_index"])],
-                    "actual_log_composite_score": row["actual_log_composite_score"],
-                    "predicted_log_composite_score": row["predicted_log_composite_score"],
-                    "actual_composite_score": row["actual_composite_score"],
-                    "predicted_composite_score": row["predicted_composite_score"],
-                }
-            )
-
-
 def serializable_config(config: TrainConfig) -> dict[str, object]:
     """Convert config values into JSON-safe objects."""
     values = asdict(config)
@@ -438,7 +409,6 @@ def main() -> None:
         },
         model_path,
     )
-    write_predictions(test_rows, dataset.node_ids, predictions_path)
 
     metrics_payload = {
         "config": serializable_config(config),
