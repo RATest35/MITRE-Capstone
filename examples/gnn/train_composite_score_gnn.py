@@ -96,13 +96,6 @@ def parse_args() -> TrainConfig:
     arguments["feature_groups"] = tuple(part.strip() for part in feature_groups_text.split(",") if part.strip()) or None
     return TrainConfig(**arguments)
 
-
-def set_seed(seed: int) -> None:
-    """Set random seeds."""
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-
 def build_dataloaders(
     dataset: GraphDataset,
     train_indices: np.ndarray,
@@ -352,7 +345,8 @@ def main() -> None:
     """Train and evaluate the composite score GNN."""
     config = parse_args()
     config.output_dir.mkdir(parents=True, exist_ok=True)
-    set_seed(config.train_seed)
+    np.random.seed(config.train_seed)
+    torch.manual_seed(config.train_seed)
     device = torch.device(config.device)
 
     dataset, group_keys, train_indices, val_indices, test_indices, feature_mean, feature_std = prepare_dataset(config)
