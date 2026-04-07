@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from dataclasses import asdict, dataclass
@@ -256,15 +255,9 @@ def pairwise_ranking_loss(
     return (pair_losses * pair_weights).sum() / pair_weights.sum().clamp_min(1e-6)
 
 
-def serializable_config(config: TrainConfig) -> dict[str, object]:
-    """Convert config values into JSON-safe objects."""
-    values = asdict(config)
-    return {key: str(value) if isinstance(value, Path) else value for key, value in values.items()}
-
-
 def prepare_dataset(
     config: TrainConfig,
-) -> tuple[GraphDataset, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[GraphDataset, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Load, split, and standardize the dataset."""
     raw_dataset = load_graph_dataset(
         graphml_path=config.graphml_path,
@@ -294,51 +287,7 @@ def prepare_dataset(
         in_neighbors=raw_dataset.in_neighbors,
         out_neighbors=raw_dataset.out_neighbors,
     )
-    return dataset, dataset.group_keys, train_indices, val_indices, test_indices, feature_mean, feature_std
-
-
-def save_outputs(
-    config: TrainConfig,
-    model: CompositeScoreGNN,
-    feature_mean: np.ndarray,
-    feature_std: np.ndarray,
-    test_loss: float,
-    test_metrics: dict[str, float],
-    history: list[dict[str, float]],
-    group_keys: np.ndarray,
-    train_indices: np.ndarray,
-    val_indices: np.ndarray,
-    test_indices: np.ndarray,
-) -> tuple[Path, Path, Path]:
-    """Save model and metrics artifacts."""
-    model_path = config.output_dir / "composite_score_gnn.pt"
-    predictions_path = config.output_dir / "composite_score_predictions.csv"
-    metrics_path = config.output_dir / "metrics.json"
-
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "feature_mean": feature_mean,
-            "feature_std": feature_std,
-            "config": asdict(config),
-        },
-        model_path,
-    )
-
-    metrics_payload = {
-        "config": serializable_config(config),
-        "test_loss": test_loss,
-        "test_metrics": test_metrics,
-        "history": history,
-        "train_size": int(len(train_indices)),
-        "val_size": int(len(val_indices)),
-        "test_size": int(len(test_indices)),
-        "train_group_count": int(len({group_keys[index] for index in train_indices.tolist()})),
-        "val_group_count": int(len({group_keys[index] for index in val_indices.tolist()})),
-        "test_group_count": int(len({group_keys[index] for index in test_indices.tolist()})),
-    }
-    metrics_path.write_text(json.dumps(metrics_payload, indent=2, default=str), encoding="utf-8")
-    return model_path, predictions_path, metrics_path
+    return dataset, train_indices, val_indices, test_indices, feature_mean, feature_std
 
 
 def main() -> None:
@@ -349,7 +298,7 @@ def main() -> None:
     torch.manual_seed(config.train_seed)
     device = torch.device(config.device)
 
-    dataset, group_keys, train_indices, val_indices, test_indices, feature_mean, feature_std = prepare_dataset(config)
+    dataset, train_indices, val_indices, test_indices, feature_mean, feature_std = prepare_dataset(config)
 
     train_loader, val_loader, test_loader = build_dataloaders(
         dataset=dataset,
@@ -370,20 +319,11 @@ def main() -> None:
     best_state: dict[str, torch.Tensor] | None = None
     best_val_score = float("-inf")
     stale_epochs = 0
-    history: list[dict[str, float]] = []
 
     for epoch in range(1, config.epochs + 1):
         train_loss = train_epoch(model, train_loader, optimizer, device, config)
         val_loss, val_metrics, _ = evaluate(model, val_loader, device)
         val_score = float(val_metrics[config.selection_metric])
-        history.append(
-            {
-                "epoch": float(epoch),
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-                **val_metrics,
-            }
-        )
 
         print(
             f"Epoch {epoch:03d} | "
@@ -407,27 +347,22 @@ def main() -> None:
         raise RuntimeError("Training did not produce a valid model state.")
 
     model.load_state_dict(best_state)
-    test_loss, test_metrics, _ = evaluate(model, test_loader, device)
-    model_path, predictions_path, metrics_path = save_outputs(
-        config=config,
-        model=model,
-        feature_mean=feature_mean,
-        feature_std=feature_std,
-        test_loss=test_loss,
-        test_metrics=test_metrics,
-        history=history,
-        group_keys=group_keys,
-        train_indices=train_indices,
-        val_indices=val_indices,
-        test_indices=test_indices,
+    _, test_metrics, _ = evaluate(model, test_loader, device)
+    model_path = config.output_dir / "composite_score_gnn.pt"
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "feature_mean": feature_mean,
+            "feature_std": feature_std,
+            "config": asdict(config),
+        },
+        model_path,
     )
 
     print("Test metrics:")
     for key, value in test_metrics.items():
         print(f"  {key}: {value:.6f}")
     print(f"Saved model to {model_path}")
-    print(f"Saved predictions to {predictions_path}")
-    print(f"Saved metrics to {metrics_path}")
 
 
 if __name__ == "__main__":
