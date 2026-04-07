@@ -88,6 +88,16 @@ def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDa
         out_neighbors[source_index].append((target_index, flow))
         in_neighbors[target_index].append((source_index, flow))
 
+    # ---------------------------------------------------------
+    # Sort neighbors by neighbor total flow for deterministic sampling.
+    # ---------------------------------------------------------
+    total_flows = [
+        sum(flow for _, flow in in_neighbors[index]) + sum(flow for _, flow in out_neighbors[index])
+        for index in range(len(node_ids))
+    ]
+    for neighbors in in_neighbors + out_neighbors:
+        neighbors.sort(key=lambda item: total_flows[item[0]], reverse=True)
+
     features = torch.tensor(
         [_feature_row(in_neighbors[index], out_neighbors[index]) for index in range(len(node_ids))],
         dtype=torch.float32,
