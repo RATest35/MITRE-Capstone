@@ -1,3 +1,6 @@
+
+Structure: GraphSAGE
+
 python3 gnn/train.py \
     --graphml-path gnn/dataset/composite_risk.graphml \
     --output-path gnn/composite_score_gnn.pt \
