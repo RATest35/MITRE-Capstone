@@ -11,7 +11,7 @@ from torch.optim import Adam
 from torch_geometric.loader import DataLoader
 
 from dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_split
-from model import GraphSAGEGNN
+from model import TransformerConvGNN
 
 
 # ---------------------------------------------------------
@@ -19,8 +19,8 @@ from model import GraphSAGEGNN
 # ---------------------------------------------------------
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--graphml-path", type=Path, default=Path("gnn/dataset/composite_risk.graphml"))
-    parser.add_argument("--output-path", type=Path, default=Path("gnn/composite_score_gnn.pt"))
+    parser.add_argument("--graphml-path", type=Path, default=Path("transformerconv-gnn/dataset/composite_risk.graphml"))
+    parser.add_argument("--output-path", type=Path, default=Path("transformerconv-gnn/composite_score_gnn.pt"))
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--num-layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.1)
@@ -87,7 +87,7 @@ def build_loader(
 # Run one epoch and compute the masked regression loss.
 # ---------------------------------------------------------
 def run_epoch(
-    model: GraphSAGEGNN,
+    model: TransformerConvGNN,
     loader: DataLoader,
     optimizer: Adam | None,
     device: torch.device,
@@ -99,7 +99,7 @@ def run_epoch(
 
     for batch in loader:
         batch = batch.to(device)
-        predictions = model(batch.x, batch.edge_index, batch.edge_weight)
+        predictions = model(batch.x, batch.edge_index, batch.edge_attr)
         mask = batch.seed_mask
         loss = criterion(predictions[mask], batch.y[mask])
 
@@ -119,7 +119,7 @@ def run_epoch(
 # Compute ranking metrics for top-risk node retrieval.
 # ---------------------------------------------------------
 def evaluate_ranking(
-    model: GraphSAGEGNN,
+    model: TransformerConvGNN,
     loader: DataLoader,
     device: torch.device,
 ) -> dict[str, float]:
@@ -129,7 +129,7 @@ def evaluate_ranking(
     model.eval()
     for batch in loader:
         batch = batch.to(device)
-        outputs = model(batch.x, batch.edge_index, batch.edge_weight)
+        outputs = model(batch.x, batch.edge_index, batch.edge_attr)
         mask = batch.seed_mask
         predictions.append(outputs[mask].detach().cpu())
         targets.append(batch.y[mask].detach().cpu())
@@ -179,7 +179,7 @@ def main() -> None:
     train_loader = build_loader(dataset, train_indices, train_indices, sampler_config, args.batch_size, True)
     val_loader = build_loader(dataset, val_indices, train_indices, sampler_config, args.batch_size, False)
     test_loader = build_loader(dataset, test_indices, train_indices, sampler_config, args.batch_size, False)
-    model = GraphSAGEGNN(
+    model = TransformerConvGNN(
         input_dim=dataset.features.size(1),
         hidden_dim=args.hidden_dim,
         num_layers=args.num_layers,

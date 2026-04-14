@@ -208,7 +208,11 @@ class RootedSubgraphDataset(Dataset[Data]):
 
         node_tensor = torch.as_tensor(sampled_nodes, dtype=torch.long)
         edge_index = torch.empty((2, 0), dtype=torch.long) if not edge_pairs else torch.tensor(edge_pairs, dtype=torch.long).t().contiguous()
-        edge_weight = torch.empty((0,), dtype=torch.float32) if not edge_weights else torch.tensor(edge_weights, dtype=torch.float32)
+        edge_attr = (
+            torch.empty((0, 1), dtype=torch.float32)
+            if not edge_weights
+            else torch.tensor(edge_weights, dtype=torch.float32).unsqueeze(-1)
+        )
         y = torch.zeros(len(sampled_nodes), dtype=torch.float32)
         y_weight = torch.zeros(len(sampled_nodes), dtype=torch.float32)
         seed_mask = torch.zeros(len(sampled_nodes), dtype=torch.bool)
@@ -219,7 +223,7 @@ class RootedSubgraphDataset(Dataset[Data]):
         return Data(
             x=self.graph_dataset.features[node_tensor],
             edge_index=edge_index,
-            edge_weight=edge_weight,
+            edge_attr=edge_attr,
             y=y,
             y_weight=y_weight,
             seed_mask=seed_mask,
