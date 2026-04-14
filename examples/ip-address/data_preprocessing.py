@@ -14,7 +14,7 @@ class FlowDataPreprocessor:
         """
         Clean one chunk of the dataset.
         """
-        # keep only needed columns
+        # keep only need columns
         chunk = chunk[self.required_columns].copy()
 
         # standardize whitespace in strings

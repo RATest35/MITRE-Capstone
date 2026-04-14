@@ -2,8 +2,8 @@ import networkx as nx
 import time
 
 # Change path to the graphml file
-INPUT_PATH = 'ip_graph_23511_nodes_edges_with_flow.graphml'
-OUTPUT_PATH = 'composite_risk.graphml'
+INPUT_PATH = ''
+OUTPUT_PATH = ''
 
 def to_float(value):
     try:
@@ -18,17 +18,49 @@ def load_graph(file_name):
 
 def add_total_flow(G, flow_attr='flow'):
     for n in G.nodes():
-        in_flow = sum(to_float(data.get(flow_attr, 0.0)) for _, _, data in G.in_edges(n, data=True))
-        out_flow = sum(to_float(data.get(flow_attr, 0.0)) for _, _, data in G.out_edges(n, data=True))
+        in_flow = sum(to_float(data.get(flow_attr)) for _, _, data in G.in_edges(n, data=True))
+        out_flow = sum(to_float(data.get(flow_attr)) for _, _, data in G.out_edges(n, data=True))
         G.nodes[n]['in_flow'] = in_flow
         G.nodes[n]['out_flow'] = out_flow
         G.nodes[n]['flow_loss'] = in_flow + out_flow
 
     return G
 
+def normalize_multiple_attributes(G, attr_specs):
+    """
+    attr_specs: list of tuples
+        (attr_name, normalized_name, new_min, new_max)
+    """
+
+    # Step 1: collect values for each attribute
+    values_dict = {attr: [] for attr, _, _, _ in attr_specs}
+
+    for _, data in G.nodes(data=True):
+        for attr, _, _, _ in attr_specs:
+            values_dict[attr].append(to_float(data.get(attr, 0.0)))
+
+    # Step 2: compute min/max for each attribute
+    min_max = {}
+    for attr, values in values_dict.items():
+        min_max[attr] = (min(values), max(values))
+
+    # Step 3: normalize all attributes in one pass
+    for _, data in G.nodes(data=True):
+        for attr, norm_attr, new_min, new_max in attr_specs:
+            val = to_float(data.get(attr, 0.0))
+            min_val, max_val = min_max[attr]
+
+            if max_val == min_val:
+                data[norm_attr] = new_min
+            else:
+                normalized_01 = (val - min_val) / (max_val - min_val)
+                data[norm_attr] = new_min + normalized_01 * (new_max - new_min)
+
+    return G
+
 
 def add_pagerank(G):
-    pr = nx.pagerank(G, weight='flow')
+    pr = nx.pagerank(G, weight='bytes_per_sec')
     for n, val in pr.items():
         G.nodes[n]['pagerank'] = val
     return G
@@ -41,19 +73,19 @@ def add_distance_from_strength(G, strength_attr="bytes_per_sec", distance_attr="
         epsilon is added to avoid division by zero.
     """
     for u, v, data in G.edges(data=True):
-        strength = to_float(data.get(strength_attr, 0.0))
+        strength = to_float(data.get(strength_attr))
         data[distance_attr] = 1.0 / (strength + epsilon)
 
     return G
 
 
-def add_weighted_betweenness(G, strength_attr="bytes_per_sec", distance_attr="distance", normalized=True):
+def add_weighted_betweenness(G, strength_attr="bytes_per_sec", distance_attr="distance"):
     """
     Uses inverse of strength_attr as distance because higher traffic
     should act like a stronger/shorter connection.
     """
     add_distance_from_strength(G, strength_attr=strength_attr, distance_attr=distance_attr)
-    bet = nx.betweenness_centrality(G, weight=distance_attr, normalized=normalized)
+    bet = nx.betweenness_centrality(G, weight=distance_attr)
 
     for n, score in bet.items():
         G.nodes[n]["weighted_betweenness"] = score
@@ -62,12 +94,11 @@ def add_weighted_betweenness(G, strength_attr="bytes_per_sec", distance_attr="di
 
 
 def add_composite_score(G):
-    for n, data in G.nodes(data=True):
-
-        risk = 1
-        flow = data.get("flow_loss", 0)
-        bet = data.get("weighted_betweenness", 0)
-        pr = data.get("pagerank", 0)
+    for _, data in G.nodes(data=True):
+        risk = to_float(data.get("random_probability"))
+        flow = to_float(data.get("flow_loss_norm"))
+        bet = to_float(data.get("weighted_betweenness_norm"))
+        pr = to_float(data.get("pagerank_norm"))
 
         importance = flow + bet + pr
 
@@ -79,13 +110,22 @@ def add_composite_score(G):
 
 def compute_composite_score(input_file, output_file):
     G = load_graph(input_file)
+
     add_total_flow(G)
     add_weighted_betweenness(G)
     add_pagerank(G)
+
+    normalize_multiple_attributes(G, [
+        ("in_flow", "in_flow_norm", 0, 1),
+        ("out_flow", "out_flow_norm", 0, 1),
+        ("flow_loss", "flow_loss_norm", 0, 1),
+        ("weighted_betweenness", "weighted_betweenness_norm", 0, 5),
+        ("pagerank", "pagerank_norm", 0, 5),
+    ])
+
     add_composite_score(G)
 
     nx.write_graphml(G, output_file)
-
     return G
 
 
@@ -109,7 +149,7 @@ if __name__ == "__main__":
 
     top_nodes = sorted(
         G.nodes(data=True),
-        key=lambda x: x[1].get("composite_score", 0),
+        key=lambda x: x[1].get("composite_score"),
         reverse=True
     )[:10]
 
@@ -117,6 +157,6 @@ if __name__ == "__main__":
     for node, data in top_nodes:
         print(
             node,
-            "Composite:", data.get("composite_score", 0),
-            "Risk:", data.get("risk_percent", 0),
+            "Composite:", data.get("composite_score"),
+            "Risk:", data.get("random_probability"),
         )
