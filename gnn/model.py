@@ -5,7 +5,7 @@ from torch import nn
 from torch_geometric.nn import SAGEConv
 
 
-class CompositeScoreGNN(nn.Module):
+class GraphSAGEGNN(nn.Module):
     """GraphSAGE regressor for composite score prediction."""
 
     def __init__(

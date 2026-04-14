@@ -11,7 +11,7 @@ from torch.optim import Adam
 from torch_geometric.loader import DataLoader
 
 from dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_split
-from model import CompositeScoreGNN
+from model import GraphSAGEGNN
 
 
 # ---------------------------------------------------------
@@ -87,7 +87,7 @@ def build_loader(
 # Run one epoch and compute the masked regression loss.
 # ---------------------------------------------------------
 def run_epoch(
-    model: CompositeScoreGNN,
+    model: GraphSAGEGNN,
     loader: DataLoader,
     optimizer: Adam | None,
     device: torch.device,
@@ -119,7 +119,7 @@ def run_epoch(
 # Compute ranking metrics for top-risk node retrieval.
 # ---------------------------------------------------------
 def evaluate_ranking(
-    model: CompositeScoreGNN,
+    model: GraphSAGEGNN,
     loader: DataLoader,
     device: torch.device,
 ) -> dict[str, float]:
@@ -179,7 +179,7 @@ def main() -> None:
     train_loader = build_loader(dataset, train_indices, train_indices, sampler_config, args.batch_size, True)
     val_loader = build_loader(dataset, val_indices, train_indices, sampler_config, args.batch_size, False)
     test_loader = build_loader(dataset, test_indices, train_indices, sampler_config, args.batch_size, False)
-    model = CompositeScoreGNN(
+    model = GraphSAGEGNN(
         input_dim=dataset.features.size(1),
         hidden_dim=args.hidden_dim,
         num_layers=args.num_layers,
