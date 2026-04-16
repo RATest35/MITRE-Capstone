@@ -13,6 +13,8 @@ from torch_geometric.loader import DataLoader
 from dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_split
 from model import TransformerConvGNN
 
+DEFAULT_LAYER_DIMS = [128, 96, 64, 32]
+
 
 # ---------------------------------------------------------
 # Parse the minimum set of CLI arguments for training.
@@ -21,8 +23,6 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--graphml-path", type=Path, default=Path("transformerconv-gnn/dataset/composite_score_with_bytes_per_sec.graphml"))
     parser.add_argument("--output-path", type=Path, default=Path("transformerconv-gnn/composite_score_gnn.pt"))
-    parser.add_argument("--hidden-dim", type=int, default=64)
-    parser.add_argument("--num-layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--patience", type=int, default=5)
@@ -181,8 +181,7 @@ def main() -> None:
     test_loader = build_loader(dataset, test_indices, train_indices, sampler_config, args.batch_size, False)
     model = TransformerConvGNN(
         input_dim=dataset.features.size(1),
-        hidden_dim=args.hidden_dim,
-        num_layers=args.num_layers,
+        layer_dims=DEFAULT_LAYER_DIMS,
         dropout=args.dropout,
     ).to(device)
     optimizer = Adam(model.parameters(), lr=args.lr)
@@ -223,7 +222,10 @@ def main() -> None:
             "model_state_dict": model.state_dict(),
             "feature_mean": feature_mean,
             "feature_std": feature_std,
-            "config": vars(args),
+            "config": {
+                **vars(args),
+                "layer_dims": DEFAULT_LAYER_DIMS,
+            },
             "test_loss": test_loss,
             "test_metrics": test_metrics,
         },
