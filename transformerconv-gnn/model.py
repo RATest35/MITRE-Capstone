@@ -28,7 +28,7 @@ class TransformerConvGNN(nn.Module):
         # Build edge-aware TransformerConv blocks with residual norms.
         # ---------------------------------------------------------
         self.layers = nn.ModuleList(
-            TransformerConv(hidden_dim, hidden_dim, edge_dim=1, dropout=dropout)
+            TransformerConv(hidden_dim, hidden_dim, edge_dim=2, dropout=dropout)
             for _ in range(num_layers)
         )
         self.norms = nn.ModuleList(nn.LayerNorm(hidden_dim) for _ in range(num_layers))

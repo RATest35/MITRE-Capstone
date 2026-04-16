@@ -19,7 +19,7 @@ from model import TransformerConvGNN
 # ---------------------------------------------------------
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--graphml-path", type=Path, default=Path("transformerconv-gnn/dataset/composite_risk.graphml"))
+    parser.add_argument("--graphml-path", type=Path, default=Path("transformerconv-gnn/dataset/composite_score_with_bytes_per_sec.graphml"))
     parser.add_argument("--output-path", type=Path, default=Path("transformerconv-gnn/composite_score_gnn.pt"))
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--num-layers", type=int, default=2)

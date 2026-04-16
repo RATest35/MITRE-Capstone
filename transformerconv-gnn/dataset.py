@@ -24,8 +24,8 @@ class GraphDataset:
     targets: torch.Tensor
     raw_targets: torch.Tensor
     sample_weights: torch.Tensor
-    in_neighbors: list[list[tuple[int, float]]]
-    out_neighbors: list[list[tuple[int, float]]]
+    in_neighbors: list[list[tuple[int, float, float]]]
+    out_neighbors: list[list[tuple[int, float, float]]]
 
 
 @dataclass(frozen=True)
@@ -55,13 +55,13 @@ def _group_key(node_id: str, prefix_len: int) -> str:
 # # deg_in, deg_out, in_flow, out_flow
 # ---------------------------------------------------------
 def _feature_row(
-    in_neighbors: list[tuple[int, float]],
-    out_neighbors: list[tuple[int, float]],
+    in_neighbors: list[tuple[int, float, float]],
+    out_neighbors: list[tuple[int, float, float]],
 ) -> list[float]:
     in_degree = float(len(in_neighbors))
     out_degree = float(len(out_neighbors))
-    in_flow = float(sum(flow for _, flow in in_neighbors))
-    out_flow = float(sum(flow for _, flow in out_neighbors))
+    in_flow = float(sum(flow for _, flow, _ in in_neighbors))
+    out_flow = float(sum(flow for _, flow, _ in out_neighbors))
     return [
         math.log1p(in_degree),
         math.log1p(out_degree),
@@ -78,21 +78,22 @@ def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDa
     node_ids = list(directed_graph.nodes())
     node_id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
     group_keys = [_group_key(node_id, split_prefix_len) for node_id in node_ids]
-    in_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
-    out_neighbors: list[list[tuple[int, float]]] = [[] for _ in node_ids]
+    in_neighbors: list[list[tuple[int, float, float]]] = [[] for _ in node_ids]
+    out_neighbors: list[list[tuple[int, float, float]]] = [[] for _ in node_ids]
 
     for source, target, data in directed_graph.edges(data=True):
         source_index = node_id_to_index[source]
         target_index = node_id_to_index[target]
         flow = _safe_float(data.get("flow"))
-        out_neighbors[source_index].append((target_index, flow))
-        in_neighbors[target_index].append((source_index, flow))
+        bytes_per_sec = _safe_float(data.get("bytes_per_sec"))
+        out_neighbors[source_index].append((target_index, flow, bytes_per_sec))
+        in_neighbors[target_index].append((source_index, flow, bytes_per_sec))
 
     # ---------------------------------------------------------
     # Sort neighbors by neighbor total flow for deterministic sampling.
     # ---------------------------------------------------------
     total_flows = [
-        sum(flow for _, flow in in_neighbors[index]) + sum(flow for _, flow in out_neighbors[index])
+        sum(flow for _, flow, _ in in_neighbors[index]) + sum(flow for _, flow, _ in out_neighbors[index])
         for index in range(len(node_ids))
     ]
     for neighbors in in_neighbors + out_neighbors:
@@ -196,22 +197,22 @@ class RootedSubgraphDataset(Dataset[Data]):
         edge_pairs = [
             [local_index[source], local_index[target]]
             for source in sampled_nodes
-            for target, _ in self.graph_dataset.out_neighbors[source]
+            for target, _, _ in self.graph_dataset.out_neighbors[source]
             if target in local_index
         ]
-        edge_weights = [
-            math.log1p(flow)
+        edge_features = [
+            [math.log1p(flow), math.log1p(bytes_per_sec)]
             for source in sampled_nodes
-            for target, flow in self.graph_dataset.out_neighbors[source]
+            for target, flow, bytes_per_sec in self.graph_dataset.out_neighbors[source]
             if target in local_index
         ]
 
         node_tensor = torch.as_tensor(sampled_nodes, dtype=torch.long)
         edge_index = torch.empty((2, 0), dtype=torch.long) if not edge_pairs else torch.tensor(edge_pairs, dtype=torch.long).t().contiguous()
         edge_attr = (
-            torch.empty((0, 1), dtype=torch.float32)
-            if not edge_weights
-            else torch.tensor(edge_weights, dtype=torch.float32).unsqueeze(-1)
+            torch.empty((0, 2), dtype=torch.float32)
+            if not edge_features
+            else torch.tensor(edge_features, dtype=torch.float32)
         )
         y = torch.zeros(len(sampled_nodes), dtype=torch.float32)
         y_weight = torch.zeros(len(sampled_nodes), dtype=torch.float32)
@@ -246,7 +247,7 @@ class RootedSubgraphDataset(Dataset[Data]):
                     (self.graph_dataset.out_neighbors[node_index], self.sampler_config.max_out_neighbors),
                 ):
                     picked_neighbors = neighbors if limit <= 0 else neighbors[:limit]
-                    for neighbor_index, _ in picked_neighbors:
+                    for neighbor_index, _, _ in picked_neighbors:
                         if not self.allowed_mask[neighbor_index] or neighbor_index in seen:
                             continue
                         seen.add(neighbor_index)
