@@ -71,9 +71,28 @@ def _feature_row(
 
 
 # ---------------------------------------------------------
+# Build target-aware sample weights for ranking-focused training.
+# ---------------------------------------------------------
+def _build_sample_weights(
+    raw_targets: torch.Tensor,
+    sample_weight_max: float,
+) -> torch.Tensor:
+    sorted_indices = torch.argsort(raw_targets)
+    rank_positions = torch.empty_like(sorted_indices, dtype=torch.float32)
+    rank_positions[sorted_indices] = torch.arange(len(raw_targets), dtype=torch.float32)
+    rank_percentiles = rank_positions / max(len(raw_targets) - 1, 1)
+    scaled_weights = 1.0 + rank_percentiles * (sample_weight_max - 1.0)
+    return scaled_weights.clamp(max=sample_weight_max)
+
+
+# ---------------------------------------------------------
 # Load the directed graph and convert it to training tensors.
 # ---------------------------------------------------------
-def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDataset:
+def load_graph_dataset(
+    graphml_path: Path,
+    split_prefix_len: int = 2,
+    sample_weight_max: float = 5.0,
+) -> GraphDataset:
     directed_graph = nx.DiGraph(nx.read_graphml(graphml_path))
     node_ids = list(directed_graph.nodes())
     node_id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
@@ -107,6 +126,7 @@ def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDa
         [_safe_float(directed_graph.nodes[node_id].get("composite_score")) for node_id in node_ids],
         dtype=torch.float32,
     )
+    sample_weights = _build_sample_weights(raw_targets, sample_weight_max)
 
     return GraphDataset(
         node_ids=node_ids,
@@ -115,7 +135,7 @@ def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDa
         features=features,
         targets=torch.log1p(raw_targets),
         raw_targets=raw_targets,
-        sample_weights=torch.ones_like(raw_targets),
+        sample_weights=sample_weights,
         in_neighbors=in_neighbors,
         out_neighbors=out_neighbors,
     )

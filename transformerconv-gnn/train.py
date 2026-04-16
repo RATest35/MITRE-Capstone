@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch import nn
 from torch.optim import Adam
 from torch_geometric.loader import DataLoader
 
@@ -32,6 +31,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-hops", type=int, default=1)
     parser.add_argument("--max-in-neighbors", type=int, default=32)
     parser.add_argument("--max-out-neighbors", type=int, default=32)
+    parser.add_argument("--ranking-alpha", type=float, default=1.0)
+    parser.add_argument("--sample-weight-max", type=float, default=5.0)
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -42,7 +43,10 @@ def parse_args() -> argparse.Namespace:
 def prepare_dataset(
     args: argparse.Namespace,
 ) -> tuple[GraphDataset, torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
-    raw_dataset = load_graph_dataset(args.graphml_path)
+    raw_dataset = load_graph_dataset(
+        args.graphml_path,
+        sample_weight_max=args.sample_weight_max,
+    )
     train_indices, val_indices, test_indices = subnet_group_split(
         group_keys=raw_dataset.group_keys,
         train_ratio=0.7,
@@ -85,15 +89,63 @@ def build_loader(
 
 
 # ---------------------------------------------------------
-# Run one epoch and compute the masked regression loss.
+# Compute the weighted regression loss for root predictions.
+# ---------------------------------------------------------
+def compute_weighted_mse_loss(
+    predictions: torch.Tensor,
+    targets: torch.Tensor,
+    weights: torch.Tensor,
+) -> torch.Tensor:
+    squared_errors = (predictions - targets).pow(2)
+    weighted_errors = squared_errors * weights
+    return weighted_errors.sum() / weights.sum().clamp_min(1e-12)
+
+
+# ---------------------------------------------------------
+# Compute the pairwise ranking loss across root predictions.
+# ---------------------------------------------------------
+def compute_pairwise_ranking_loss(
+    predictions: torch.Tensor,
+    targets: torch.Tensor,
+    weights: torch.Tensor,
+) -> torch.Tensor:
+    target_differences = targets.unsqueeze(1) - targets.unsqueeze(0)
+    pair_mask = target_differences > 0
+
+    if not pair_mask.any():
+        return predictions.new_zeros(())
+
+    prediction_differences = predictions.unsqueeze(1) - predictions.unsqueeze(0)
+    pair_weights = 0.5 * (weights.unsqueeze(1) + weights.unsqueeze(0))
+    ranking_terms = -torch.nn.functional.logsigmoid(prediction_differences)
+    weighted_terms = ranking_terms[pair_mask] * pair_weights[pair_mask]
+    return weighted_terms.sum() / pair_weights[pair_mask].sum().clamp_min(1e-12)
+
+
+# ---------------------------------------------------------
+# Compute the weighted regression and ranking loss terms.
+# ---------------------------------------------------------
+def compute_batch_loss(
+    predictions: torch.Tensor,
+    targets: torch.Tensor,
+    weights: torch.Tensor,
+    ranking_alpha: float,
+) -> torch.Tensor:
+    regression_loss = compute_weighted_mse_loss(predictions, targets, weights)
+    ranking_loss = compute_pairwise_ranking_loss(predictions, targets, weights)
+    return regression_loss + ranking_alpha * ranking_loss
+
+
+# ---------------------------------------------------------
+# Run one epoch and compute the masked training objective.
 # ---------------------------------------------------------
 def run_epoch(
     model: TransformerConvGNN,
     loader: DataLoader,
     optimizer: Adam | None,
     device: torch.device,
+    ranking_alpha: float,
 ) -> float:
-    criterion = nn.MSELoss()
     total_loss = 0.0
     total_count = 0
     model.train() if optimizer is not None else model.eval()
@@ -102,7 +154,15 @@ def run_epoch(
         batch = batch.to(device)
         predictions = model(batch.x, batch.edge_index, batch.edge_attr)
         mask = batch.seed_mask
-        loss = criterion(predictions[mask], batch.y[mask])
+        root_predictions = predictions[mask]
+        root_targets = batch.y[mask]
+        root_weights = batch.y_weight[mask]
+        loss = compute_batch_loss(
+            root_predictions,
+            root_targets,
+            root_weights,
+            ranking_alpha,
+        )
 
         if optimizer is not None:
             optimizer.zero_grad()
@@ -191,9 +251,21 @@ def main() -> None:
     patience_count = 0
 
     for epoch in range(1, args.epochs + 1):
-        train_loss = run_epoch(model, train_loader, optimizer, device)
+        train_loss = run_epoch(
+            model,
+            train_loader,
+            optimizer,
+            device,
+            args.ranking_alpha,
+        )
         with torch.no_grad():
-            val_loss = run_epoch(model, val_loader, None, device)
+            val_loss = run_epoch(
+                model,
+                val_loader,
+                None,
+                device,
+                args.ranking_alpha,
+            )
             val_metrics = evaluate_ranking(model, val_loader, device)
         print(
             f"epoch={epoch} train_loss={train_loss:.6f} val_loss={val_loss:.6f} "
@@ -214,7 +286,13 @@ def main() -> None:
         model.load_state_dict(best_state)
 
     with torch.no_grad():
-        test_loss = run_epoch(model, test_loader, None, device)
+        test_loss = run_epoch(
+            model,
+            test_loader,
+            None,
+            device,
+            args.ranking_alpha,
+        )
         test_metrics = evaluate_ranking(model, test_loader, device)
 
     args.output_path.parent.mkdir(parents=True, exist_ok=True)
