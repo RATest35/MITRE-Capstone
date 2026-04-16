@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--graphml-path", type=Path, default=Path("transformerconv-gnn/dataset/composite_score_with_bytes_per_sec.graphml"))
     parser.add_argument("--output-path", type=Path, default=Path("transformerconv-gnn/composite_score_gnn.pt"))
+    parser.add_argument("--layer-dims", type=int, nargs="+", default=DEFAULT_LAYER_DIMS)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--patience", type=int, default=5)
@@ -181,7 +182,7 @@ def main() -> None:
     test_loader = build_loader(dataset, test_indices, train_indices, sampler_config, args.batch_size, False)
     model = TransformerConvGNN(
         input_dim=dataset.features.size(1),
-        layer_dims=DEFAULT_LAYER_DIMS,
+        layer_dims=args.layer_dims,
         dropout=args.dropout,
     ).to(device)
     optimizer = Adam(model.parameters(), lr=args.lr)
@@ -222,10 +223,7 @@ def main() -> None:
             "model_state_dict": model.state_dict(),
             "feature_mean": feature_mean,
             "feature_std": feature_std,
-            "config": {
-                **vars(args),
-                "layer_dims": DEFAULT_LAYER_DIMS,
-            },
+            "config": vars(args),
             "test_loss": test_loss,
             "test_metrics": test_metrics,
         },
