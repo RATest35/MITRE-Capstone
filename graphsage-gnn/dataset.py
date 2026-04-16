@@ -14,6 +14,18 @@ from torch_geometric.data import Data
 
 EPSILON: float = 1e-6
 
+NODE_FEATURES = [
+    "importance",
+    "pagerank_norm",
+    "weighted_betweenness_norm",
+    "flow_loss_norm",
+    "out_flow_norm",
+    "in_flow_norm",
+    "random_probability",
+]
+
+TARGET_NAME = "composite_score"
+
 
 @dataclass(frozen=True)
 class GraphDataset:
@@ -54,20 +66,8 @@ def _group_key(node_id: str, prefix_len: int) -> str:
 # Build the minimal node feature vector selected for training.
 # # deg_in, deg_out, in_flow, out_flow
 # ---------------------------------------------------------
-def _feature_row(
-    in_neighbors: list[tuple[int, float]],
-    out_neighbors: list[tuple[int, float]],
-) -> list[float]:
-    in_degree = float(len(in_neighbors))
-    out_degree = float(len(out_neighbors))
-    in_flow = float(sum(flow for _, flow in in_neighbors))
-    out_flow = float(sum(flow for _, flow in out_neighbors))
-    return [
-        math.log1p(in_degree),
-        math.log1p(out_degree),
-        math.log1p(in_flow),
-        math.log1p(out_flow),
-    ]
+def _feature_row(node_data: dict[str, object]) -> list[float]:
+    return [_safe_float(node_data.get(feature_name)) for feature_name in NODE_FEATURES]
 
 
 # ---------------------------------------------------------
@@ -99,11 +99,12 @@ def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDa
         neighbors.sort(key=lambda item: total_flows[item[0]], reverse=True)
 
     features = torch.tensor(
-        [_feature_row(in_neighbors[index], out_neighbors[index]) for index in range(len(node_ids))],
+        [_feature_row(directed_graph.nodes[node_id]) for node_id in node_ids],
         dtype=torch.float32,
     )
+
     raw_targets = torch.tensor(
-        [_safe_float(directed_graph.nodes[node_id].get("composite_score")) for node_id in node_ids],
+        [_safe_float(directed_graph.nodes[node_id].get(TARGET_NAME)) for node_id in node_ids],
         dtype=torch.float32,
     )
 
@@ -161,6 +162,48 @@ def subnet_group_split(
         split_indices[split_name].extend(indices)
 
     return tuple(np.asarray(split_indices[name], dtype=np.int64) for name in ("train", "val", "test"))
+
+
+def subnet_group_k_fold_split(
+    group_keys: list[str],
+    num_folds: int,
+    seed: int,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    grouped_indices: dict[str, list[int]] = {}
+    for node_index, group_key in enumerate(group_keys):
+        grouped_indices.setdefault(group_key, []).append(node_index)
+
+    groups = list(grouped_indices.keys())
+    rng = np.random.default_rng(seed)
+    rng.shuffle(groups)
+
+    fold_groups = np.array_split(groups, num_folds)
+    folds: list[tuple[np.ndarray, np.ndarray]] = []
+
+    for fold_idx in range(num_folds):
+        val_group_set = set(fold_groups[fold_idx])
+        train_group_set = set(
+            group
+            for idx, fold in enumerate(fold_groups)
+            if idx != fold_idx
+            for group in fold
+        )
+
+        train_indices: list[int] = []
+        val_indices: list[int] = []
+
+        for group_key, indices in grouped_indices.items():
+            if group_key in train_group_set:
+                train_indices.extend(indices)
+            elif group_key in val_group_set:
+                val_indices.extend(indices)
+
+        folds.append((
+            np.asarray(train_indices, dtype=np.int64),
+            np.asarray(val_indices, dtype=np.int64),
+        ))
+
+    return folds
 
 
 class RootedSubgraphDataset(Dataset[Data]):

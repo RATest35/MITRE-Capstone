@@ -10,7 +10,7 @@ from torch import nn
 from torch.optim import Adam
 from torch_geometric.loader import DataLoader
 
-from dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_split
+from dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_k_fold_split
 from model import GraphSAGEGNN
 
 
@@ -32,35 +32,41 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-in-neighbors", type=int, default=32)
     parser.add_argument("--max-out-neighbors", type=int, default=32)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--num-folds", type=int, default=5)
     return parser.parse_args()
 
 
 # ---------------------------------------------------------
 # Build the standardized graph dataset and split indices.
 # ---------------------------------------------------------
-def prepare_dataset(
-    args: argparse.Namespace,
-) -> tuple[GraphDataset, torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
+def prepare_dataset(args: argparse.Namespace):
     raw_dataset = load_graph_dataset(args.graphml_path)
-    train_indices, val_indices, test_indices = subnet_group_split(
+    folds = subnet_group_k_fold_split(
         group_keys=raw_dataset.group_keys,
-        train_ratio=0.7,
-        val_ratio=0.15,
+        num_folds=args.num_folds,
         seed=args.seed,
     )
+    return raw_dataset, folds
+
+def build_fold_dataset(
+    raw_dataset,
+    train_indices: np.ndarray,
+):
     features, feature_mean, feature_std = standardize_features(raw_dataset.features, train_indices)
+    log_targets = torch.log1p(raw_dataset.raw_targets)
+
     dataset = GraphDataset(
         node_ids=raw_dataset.node_ids,
         node_id_to_index=raw_dataset.node_id_to_index,
         group_keys=raw_dataset.group_keys,
         features=features,
-        targets=raw_dataset.targets,
+        targets=log_targets,
         raw_targets=raw_dataset.raw_targets,
         sample_weights=raw_dataset.sample_weights,
         in_neighbors=raw_dataset.in_neighbors,
         out_neighbors=raw_dataset.out_neighbors,
     )
-    return dataset, feature_mean, feature_std, train_indices, val_indices, test_indices
+    return dataset, feature_mean, feature_std
 
 
 # ---------------------------------------------------------
@@ -156,6 +162,47 @@ def evaluate_ranking(
         "ndcg_at_5": dcg / max(ideal_dcg, 1e-12),
     }
 
+def evaluate_regression(model, loader, device):
+    predictions_log = []
+    targets_log = []
+    targets_raw = []
+
+    model.eval()
+    for batch in loader:
+        batch = batch.to(device)
+        outputs = model(batch.x, batch.edge_index, batch.edge_weight)
+        mask = batch.seed_mask
+
+        predictions_log.append(outputs[mask].detach().cpu())
+        targets_log.append(batch.y[mask].detach().cpu())
+
+        targets_raw.append(torch.expm1(batch.y[mask].detach().cpu()))
+
+    pred_log = torch.cat(predictions_log)
+    true_log = torch.cat(targets_log)
+
+    pred_raw = torch.expm1(pred_log)
+    true_raw = torch.cat(targets_raw)
+
+    log_mse = torch.mean((pred_log - true_log) ** 2).item()
+
+    mse = torch.mean((pred_raw - true_raw) ** 2).item()
+    rmse = torch.sqrt(torch.mean((pred_raw - true_raw) ** 2)).item()
+    mae = torch.mean(torch.abs(pred_raw - true_raw)).item()
+
+    # R^2 score
+    ss_res = torch.sum((true_raw - pred_raw) ** 2)
+    ss_tot = torch.sum((true_raw - torch.mean(true_raw)) ** 2)
+    r2 = 1 - (ss_res / ss_tot).item()
+
+    return {
+        "log_mse": log_mse,
+        "mse": mse,
+        "rmse": rmse,
+        "mae": mae,
+        "r2": r2,
+    }
+
 
 # ---------------------------------------------------------
 # Train the model, track the best validation loss, and save it.
@@ -163,6 +210,7 @@ def evaluate_ranking(
 def main() -> None:
     args = parse_args()
     torch.manual_seed(args.seed)
+
     device = torch.device(
         "cuda"
         if torch.cuda.is_available()
@@ -170,71 +218,112 @@ def main() -> None:
         if torch.backends.mps.is_available()
         else "cpu"
     )
-    dataset, feature_mean, feature_std, train_indices, val_indices, test_indices = prepare_dataset(args)
+    print("device:", device)
+    if torch.cuda.is_available():
+        print("gpu:", torch.cuda.get_device_name(0))
+
+    raw_dataset, folds = prepare_dataset(args)
+
     sampler_config = SamplerConfig(
         num_hops=args.num_hops,
         max_in_neighbors=args.max_in_neighbors,
         max_out_neighbors=args.max_out_neighbors,
     )
-    train_loader = build_loader(dataset, train_indices, train_indices, sampler_config, args.batch_size, True)
-    val_loader = build_loader(dataset, val_indices, train_indices, sampler_config, args.batch_size, False)
-    test_loader = build_loader(dataset, test_indices, train_indices, sampler_config, args.batch_size, False)
-    model = GraphSAGEGNN(
-        input_dim=dataset.features.size(1),
-        hidden_dim=args.hidden_dim,
-        num_layers=args.num_layers,
-        dropout=args.dropout,
-    ).to(device)
-    optimizer = Adam(model.parameters(), lr=args.lr)
-    best_val_precision = float("-inf")
-    best_state: dict[str, torch.Tensor] | None = None
-    patience_count = 0
 
-    for epoch in range(1, args.epochs + 1):
-        train_loss = run_epoch(model, train_loader, optimizer, device)
-        with torch.no_grad():
-            val_loss = run_epoch(model, val_loader, None, device)
-            val_metrics = evaluate_ranking(model, val_loader, device)
-        print(
-            f"epoch={epoch} train_loss={train_loss:.6f} val_loss={val_loss:.6f} "
-            f"p@5={val_metrics['precision_at_5']:.4f} ndcg@5={val_metrics['ndcg_at_5']:.4f}"
+    fold_results = []
+
+    for fold_num, (train_indices, val_indices) in enumerate(folds, start=1):
+        print(f"\n===== fold {fold_num}/{args.num_folds} =====")
+
+        dataset, feature_mean, feature_std = build_fold_dataset(raw_dataset, train_indices)
+
+        train_loader = build_loader(
+            dataset, train_indices, train_indices,
+            sampler_config, args.batch_size, True
         )
-        if val_metrics["precision_at_5"] > best_val_precision:
-            best_val_precision = val_metrics["precision_at_5"]
-            best_state = {key: value.detach().cpu() for key, value in model.state_dict().items()}
-            patience_count = 0
-            continue
+        val_loader = build_loader(
+            dataset, val_indices, train_indices,
+            sampler_config, args.batch_size, False
+        )
 
-        patience_count += 1
-        if patience_count >= args.patience:
-            print(f"early_stop_epoch={epoch}")
-            break
+        model = GraphSAGEGNN(
+            input_dim=dataset.features.size(1),
+            hidden_dim=args.hidden_dim,
+            num_layers=args.num_layers,
+            dropout=args.dropout,
+        ).to(device)
 
-    if best_state is not None:
-        model.load_state_dict(best_state)
+        optimizer = Adam(model.parameters(), lr=args.lr)
+        best_val_loss = float("inf")
+        best_state: dict[str, torch.Tensor] | None = None
+        patience_count = 0
+        best_val_reg = None
 
-    with torch.no_grad():
-        test_loss = run_epoch(model, test_loader, None, device)
-        test_metrics = evaluate_ranking(model, test_loader, device)
+        for epoch in range(1, args.epochs + 1):
 
-    args.output_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "feature_mean": feature_mean,
-            "feature_std": feature_std,
-            "config": vars(args),
-            "test_loss": test_loss,
-            "test_metrics": test_metrics,
-        },
-        args.output_path,
-    )
-    print(f"test_loss={test_loss:.6f}")
+            train_loss = run_epoch(model, train_loader, optimizer, device)
+
+            with torch.no_grad():
+                val_loss = run_epoch(model, val_loader, None, device)
+                val_reg = evaluate_regression(model, val_loader, device)
+
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_val_reg = val_reg
+                best_state = {key: value.detach().cpu() for key, value in model.state_dict().items()}
+                patience_count = 0
+                continue
+
+            patience_count += 1
+            if patience_count >= args.patience:
+                print(f"early_stop_fold={fold_num} epoch={epoch}")
+                break
+
+        if best_state is not None:
+            model.load_state_dict(best_state)
+
+        fold_results.append({
+            "fold": fold_num,
+            "best_val_loss": best_val_loss,
+            "rmse": best_val_reg["rmse"],
+            "mae": best_val_reg["mae"],
+            "r2": best_val_reg["r2"],
+            "log_mse": best_val_reg["log_mse"],
+        })
+
+
+
+    mean_val_loss = float(np.mean([result["best_val_loss"] for result in fold_results]))
+    mean_rmse = float(np.mean([result["rmse"] for result in fold_results]))
+    mean_mae = float(np.mean([result["mae"] for result in fold_results]))
+    mean_r2 = float(np.mean([result["r2"] for result in fold_results]))
+    mean_log_mse = float(np.mean([result["log_mse"] for result in fold_results]))
+
+    std_rmse = float(np.std([result["rmse"] for result in fold_results]))
+    std_mae = float(np.std([result["mae"] for result in fold_results]))
+    std_r2 = float(np.std([result["r2"] for result in fold_results]))
+
+    print("\n===== cross-validation summary =====")
+    for result in fold_results:
+        print(
+            f"fold={result['fold']} "
+            f"val_loss={result['best_val_loss']:.6f} "
+            f"rmse={result['rmse']:.6f} "
+            f"mae={result['mae']:.6f} "
+            f"r2={result['r2']:.4f}"
+        )
+
     print(
-        f"test_p@5={test_metrics['precision_at_5']:.4f} "
-        f"test_ndcg@5={test_metrics['ndcg_at_5']:.4f}"
+        f"cv_mean_val_loss={mean_val_loss:.6f} "
+        f"cv_mean_log_mse={mean_log_mse:.6f} "
+        f"cv_mean_rmse={mean_rmse:.6f} "
+        f"cv_std_rmse={std_rmse:.6f} "
+        f"cv_mean_mae={mean_mae:.6f} "
+        f"cv_std_mae={std_mae:.6f} "
+        f"cv_mean_r2={mean_r2:.4f} "
+        f"cv_std_r2={std_r2:.4f}"
     )
-    print(f"saved={args.output_path}")
 
 
 if __name__ == "__main__":
