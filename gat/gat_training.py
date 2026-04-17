@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.data import Data
  
-from gat.orignal_gat_config import (
+from gat_config import (
     DEVICE,
     DROP_EDGE_PROB,
     DROPOUT,
@@ -29,7 +29,7 @@ from gat.orignal_gat_config import (
     SELECTION_METRIC,
     WEIGHT_DECAY,
 )
-from gat.orginal_gat_data import build_kfold_masks, standardize_features
+from gat_data import build_kfold_masks, standardize_features
 from gat_metrics import regression_metrics
 from gat_model import GATv2Regressor
 from gat_output import PredictionRow
@@ -60,7 +60,7 @@ def train_and_evaluate(
     all_predictions: list[PredictionRow] = []
  
     for fold_idx, (train_mask, val_mask, test_mask) in enumerate(fold_masks):
-        print(f"\n── Fold {fold_idx + 1}/{K_FOLDS} ─────────────────────────────────")
+        print(f"\n-- Fold {fold_idx + 1}/{K_FOLDS} ---------------------------------")
  
         data = deepcopy(base_data)
         data.x = standardize_features(data.x, train_mask)
