@@ -58,16 +58,16 @@ def main() -> None:
  
     all_metrics, all_predictions = train_and_evaluate(data, node_ids)
  
-    # ── Per-fold table ────────────────────────────────────────────────────
-    print(f"\n{'═' * 90}")
+    # -- Per-fold table ----------------------------------------------------
+    print(f"\n{'=' * 90}")
     print(f"  {K_FOLDS}-Fold Cross-Validation Results")
-    print(f"{'═' * 90}")
+    print(f"{'=' * 90}")
  
     header = f"  {'Fold':<6}"
     for name in _DISPLAY_METRICS:
         header += f" {name:>12}"
     print(header)
-    print(f"  {'─' * 84}")
+    print(f"  {'-' * 84}")
  
     for m in all_metrics:
         row = f"  {int(m['fold']):<6}"
@@ -75,12 +75,12 @@ def main() -> None:
             row += f" {m[name]:>12.4f}"
         print(row)
  
-    # ── Aggregated mean ± std ─────────────────────────────────────────────
+    # -- Aggregated mean ± std ---------------------------------------------
     def _summarise(key: str) -> tuple[float, float]:
         vals = [m[key] for m in all_metrics]
         return statistics.mean(vals), statistics.stdev(vals) if len(vals) > 1 else 0.0
  
-    print(f"  {'─' * 84}")
+    print(f"  {'-' * 84}")
  
     mean_row = f"  {'Mean':<6}"
     std_row = f"  {'± Std':<6}"
@@ -90,12 +90,12 @@ def main() -> None:
         std_row += f" {s:>12.4f}"
     print(mean_row)
     print(std_row)
-    print(f"{'═' * 90}")
+    print(f"{'=' * 90}")
  
-    # ── Composite risk summary ────────────────────────────────────────────
+    # -- Composite risk summary --------------------------------------------
     risks = [r["composite_risk"] for r in all_predictions]
     if risks:
-        print(f"\n── Composite risk (all test nodes across folds) ────────────")
+        print(f"\n-- Composite risk (all test nodes across folds) ------------")
         print(f"  Mean             : {statistics.mean(risks):.4f}")
         print(f"  Max              : {max(risks):.4f}")
         print(f"  Top-5 nodes      :")
@@ -103,7 +103,7 @@ def main() -> None:
         for r in top5:
             print(f"    {r['node_id']:>18s}  risk={r['composite_risk']:.4f}  "
                   f"imp={r['predicted_importance']:.4f}  fail={r['failure_probability']:.4f}")
-        print(f"{'─' * 60}\n")
+        print(f"{'-' * 60}\n")
  
     write_predictions(all_predictions, PREDICTION_CSV_PATH)
     print(f"Predictions written to: {PREDICTION_CSV_PATH}")
