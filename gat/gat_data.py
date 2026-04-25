@@ -13,8 +13,8 @@ from torch_geometric.data import Data
 from gat_config import (
     DEVICE,
     EDGE_FEATURE_KEYS,
+    IMPORTANCE_COMPONENT_KEYS,
     K_FOLDS,
-    LABEL_KEY,
     NODE_FEATURE_KEYS,
     WEIGHT_MODE,
     WEIGHT_SCALE,
@@ -39,7 +39,8 @@ def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
     node_index: dict[str, int] = {nid: i for i, nid in enumerate(node_ids)}
 
     node_features = [_node_feature_vector(graph, nid) for nid in node_ids]
-    labels = [_node_label(graph, nid) for nid in node_ids]
+    raw_targets = [_raw_importance_score(graph, nid) for nid in node_ids]
+    labels = [math.log1p(score) for score in raw_targets]
 
     edge_pairs = [[node_index[u], node_index[v]] for u, v in graph.edges()]
     edge_index = torch.tensor(edge_pairs, dtype=torch.long).t().contiguous()
@@ -52,12 +53,11 @@ def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
         )
     edge_attr = torch.tensor(edge_feature_rows, dtype=torch.float32)
 
-    # Raw targets for sample weight computation
-    raw_targets = torch.tensor(
-        [float(graph.nodes[nid].get(LABEL_KEY, 0.0)) for nid in node_ids],
-        dtype=torch.float32,
+    sample_weights = _build_sample_weights(
+        torch.tensor(raw_targets, dtype=torch.float32),
+        WEIGHT_MODE,
+        WEIGHT_SCALE,
     )
-    sample_weights = _build_sample_weights(raw_targets, WEIGHT_MODE, WEIGHT_SCALE)
 
     data = Data(
         x=torch.tensor(node_features, dtype=torch.float32),
@@ -131,10 +131,10 @@ def _node_feature_vector(graph: nx.DiGraph, node_id: str) -> list[float]:
     return base + structural
 
 
-def _node_label(graph: nx.DiGraph, node_id: str) -> float:
-    """Return log1p of the importance score for a single node."""
-    raw = float(graph.nodes[node_id].get(LABEL_KEY, 0.0))
-    return math.log1p(raw)
+def _raw_importance_score(graph: nx.DiGraph, node_id: str) -> float:
+    """Return the raw importance score for a single node."""
+    attrs = graph.nodes[node_id]
+    return sum(float(attrs.get(key, 0.0)) for key in IMPORTANCE_COMPONENT_KEYS)
 
 
 def _build_sample_weights(raw_targets: Tensor, mode: str, scale: float) -> Tensor:
