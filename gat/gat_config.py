@@ -34,9 +34,13 @@ NODE_FEATURE_KEYS: list[str] = [
     "pagerank_norm",
 ]
 
-# Label attribute — the GNN predicts importance (norm_betweenness + norm_pagerank).
-# log1p transform is applied during data loading.
-LABEL_KEY: str = "importance"
+# Importance score components used to build the training target.
+# The target is sum(component values), then log1p-transformed during loading.
+IMPORTANCE_COMPONENT_KEYS: list[str] = [
+    "weighted_betweenness_norm",
+    "pagerank_norm",
+    "flow_loss_norm",
+]
 
 # Edge attribute names used as edge features fed into GATv2Conv.
 EDGE_FEATURE_KEYS: list[str] = ["flow", "bytes_per_sec", "distance"]
@@ -48,16 +52,16 @@ EDGE_DIM: int = 3
 # Cross-validation
 
 # Number of folds for K-fold cross-validation.
-K_FOLDS: int = 5
+K_FOLDS: int = 10
 
 
 # Model architecture
 # ---------------------------------------------------------------------------
 # Number of attention heads in each GATv2Conv layer.
-NUM_HEADS: int = 4
+NUM_HEADS: int = 2
 
 # Hidden feature dimension per attention head.
-HIDDEN_CHANNELS: int = 64
+HIDDEN_CHANNELS: int = 128
 
 
 # Training
@@ -66,22 +70,22 @@ HIDDEN_CHANNELS: int = 64
 NUM_EPOCHS: int = 600
 
 # Adam learning rate (lower than GraphSAGE — GAT benefits from gentler updates).
-LEARNING_RATE: float = 5e-4
+LEARNING_RATE: float = 0.0005981364320010053
 
 # L2 regularisation strength (Adam weight_decay).
-WEIGHT_DECAY: float = 1e-4
+WEIGHT_DECAY: float = 1.0969671773921393e-05
 
 # Consecutive epochs without validation improvement before early stopping.
 PATIENCE: int = 200
 
 # Dropout probability applied after each GATv2Conv layer.
-DROPOUT: float = 0.3
+DROPOUT: float = 0.21621159087579556
 
 
 # DropEdge & MC Dropout
 
 # Probability of dropping each edge per forward pass (DropEdge).
-DROP_EDGE_PROB: float = 0.2
+DROP_EDGE_PROB: float = 0.30061413828907585
 
 # Number of stochastic forward passes at inference for MC Dropout.
 MC_DROPOUT_SAMPLES: int = 50
@@ -90,19 +94,19 @@ MC_DROPOUT_SAMPLES: int = 50
 # Sample weighting (matches composite pipeline)
 
 # Weight samples by target rank: "linear", "sqrt", or "quadratic".
-WEIGHT_MODE: str = "linear"
+WEIGHT_MODE: str = "quadratic"
 
 # Scale factor for sample weighting.  weight = 1 + scale * normalised_rank.
-WEIGHT_SCALE: float = 4.0
+WEIGHT_SCALE: float = 4.769499605360235
 
 
 # Ranking loss (optional, matches composite pipeline)
 # Weight of the pairwise ranking loss added to the regression loss.
 # Set to 0.0 to disable ranking loss entirely.
-RANKING_LOSS_WEIGHT: float = 0.0
+RANKING_LOSS_WEIGHT: float = 0.1
 
 # Margin for the pairwise ranking hinge loss.
-RANKING_MARGIN: float = 0.02
+RANKING_MARGIN: float = 0.04568004906727538
 
 # Number of ranking pairs sampled per training step.
 RANKING_PAIRS: int = 128
@@ -114,4 +118,4 @@ RANKING_PAIRS: int = 128
 # Options: any key from regression_metrics() e.g. "log_mae", "rmse",
 # "spearman", "ndcg_5pct".  Metrics where higher is better are detected
 # automatically.
-SELECTION_METRIC: str = "ndcg_5pct"
+SELECTION_METRIC: str = "top_5pct_recall"

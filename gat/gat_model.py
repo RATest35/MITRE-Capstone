@@ -26,10 +26,10 @@ class GATv2Regressor(nn.Module):
     def __init__(
         self,
         input_channels: int,
-        hidden_channels: int,
-        num_heads: int,
-        dropout: float,
-        drop_edge_prob: float = 0.2,
+        hidden_channels: int = 128,
+        num_heads: int = 4,
+        dropout: float = 0.1569455125389924,
+        drop_edge_prob: float = 0.22203374123224115,
         edge_dim: int | None = None,
     ) -> None:
    

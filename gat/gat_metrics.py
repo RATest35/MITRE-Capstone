@@ -4,15 +4,25 @@
  
 from __future__ import annotations
  
+from collections.abc import Callable
 from typing import Any
  
 import numpy as np
 from scipy.stats import pearsonr, spearmanr
  
  
-def _safe_statistic(function: Any, actual: np.ndarray, predicted: np.ndarray) -> float:
+def _is_constant(values: np.ndarray) -> bool:
+    """Return whether all values are identical."""
+    return bool(np.all(values == values[0]))
+
+
+def _safe_statistic(
+    function: Callable[[np.ndarray, np.ndarray], Any],
+    actual: np.ndarray,
+    predicted: np.ndarray,
+) -> float:
     """Return a finite correlation value, 0.0 on degenerate input."""
-    if len(actual) < 2:
+    if len(actual) < 2 or _is_constant(actual) or _is_constant(predicted):
         return 0.0
     value = function(actual, predicted).statistic
     if np.isnan(value):

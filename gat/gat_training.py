@@ -108,7 +108,8 @@ def train_and_evaluate(
         predicted_log = mean_predictions[test_mask].cpu().numpy()
         fold_metrics = regression_metrics(actual_log, predicted_log)
         fold_metrics["fold"] = float(fold_idx + 1)
-        fold_metrics["best_val_loss"] = best_state["best_val_loss"]
+        fold_metrics["train_loss"] = best_state["train_loss"]
+        fold_metrics["val_loss"] = best_state["val_loss"]
         all_metrics.append(fold_metrics)
  
         fold_rows = _build_prediction_rows(
@@ -116,6 +117,8 @@ def train_and_evaluate(
         )
         all_predictions.extend(fold_rows)
  
+        print(f"  Train loss : {fold_metrics['train_loss']:.6f}")
+        print(f"  Val loss   : {fold_metrics['val_loss']:.6f}")
         print(f"  RMSE       : {fold_metrics['rmse']:.4f}")
         print(f"  Log-MAE    : {fold_metrics['log_mae']:.4f}")
         print(f"  Spearman   : {fold_metrics['spearman']:.4f}")
@@ -146,23 +149,25 @@ def _train_model(
     higher_is_better = SELECTION_METRIC in _HIGHER_IS_BETTER
     best_state_dict: dict | None = None
     best_val_score = float("-inf") if higher_is_better else float("inf")
+    best_train_loss = float("nan")
+    best_val_loss = float("nan")
     stale_epochs = 0
- 
+
     sample_weights = data.sample_weights
- 
+
     for epoch in range(NUM_EPOCHS):
         # --- Training step ---
         model.train()
         optimizer.zero_grad()
         preds = model(data)
- 
+
         # Weighted Huber loss on training nodes
         per_sample = F.huber_loss(
             preds[train_mask], data.y[train_mask], reduction="none",
         )
         weights = sample_weights[train_mask]
         regression_loss = (per_sample * weights).sum() / weights.sum().clamp_min(1e-6)
- 
+
         # Optional pairwise ranking loss
         if RANKING_LOSS_WEIGHT > 0.0:
             ranking_loss = _pairwise_ranking_loss(
@@ -172,23 +177,27 @@ def _train_model(
             loss = regression_loss + RANKING_LOSS_WEIGHT * ranking_loss
         else:
             loss = regression_loss
- 
+
         loss.backward()
         optimizer.step()
- 
+        train_loss_value = float(loss.detach().item())
+
         # --- Validation step ---
         model.eval()
         with torch.no_grad():
             val_preds = model(data)
- 
+            val_loss_value = _compute_loss(val_preds, data, val_mask, sample_weights)
+
         actual_log = data.y[val_mask].cpu().numpy()
         predicted_log = val_preds[val_mask].cpu().numpy()
         val_metrics = regression_metrics(actual_log, predicted_log)
         val_score = val_metrics[SELECTION_METRIC]
- 
+
         improved = (val_score > best_val_score) if higher_is_better else (val_score < best_val_score)
         if improved:
             best_val_score = val_score
+            best_train_loss = train_loss_value
+            best_val_loss = val_loss_value
             best_state_dict = deepcopy(model.state_dict())
             stale_epochs = 0
         else:
@@ -196,11 +205,31 @@ def _train_model(
             if stale_epochs >= PATIENCE:
                 print(f"  Early stopping at epoch {epoch + 1}")
                 break
- 
+
     if best_state_dict is None:
         raise RuntimeError("Training did not produce a valid model state.")
- 
-    return {"state_dict": best_state_dict, "best_val_loss": best_val_score}
+
+    return {
+        "state_dict": best_state_dict,
+        "best_val_score": best_val_score,
+        "train_loss": best_train_loss,
+        "val_loss": best_val_loss,
+    }
+
+
+def _compute_loss(preds: Tensor, data: Data, mask: Tensor, sample_weights: Tensor) -> float:
+    """Compute the weighted Huber + optional ranking loss on a masked split."""
+    per_sample = F.huber_loss(preds[mask], data.y[mask], reduction="none")
+    weights = sample_weights[mask]
+    regression_loss = (per_sample * weights).sum() / weights.sum().clamp_min(1e-6)
+
+    if RANKING_LOSS_WEIGHT > 0.0:
+        ranking_loss = _pairwise_ranking_loss(
+            preds[mask], data.y[mask], weights,
+            margin=RANKING_MARGIN, max_pairs=RANKING_PAIRS,
+        )
+        return float((regression_loss + RANKING_LOSS_WEIGHT * ranking_loss).item())
+    return float(regression_loss.item())
  
  
 def _pairwise_ranking_loss(
@@ -256,7 +285,7 @@ def _build_prediction_rows(
             "actual_importance": actual_imp,
             "predicted_importance": pred_imp,
             "failure_probability": fail_prob,
-            "composite_risk": pred_imp * fail_prob,
+            "composite_risk": actual_imp * fail_prob,
         })
  
     return rows

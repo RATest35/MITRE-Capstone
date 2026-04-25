@@ -30,6 +30,8 @@ from gat_training import train_and_evaluate
  
 # Metrics to display in the summary table.
 _DISPLAY_METRICS: tuple[str, ...] = (
+    "train_loss",
+    "val_loss",
     "rmse",
     "mae",
     "log_mae",
