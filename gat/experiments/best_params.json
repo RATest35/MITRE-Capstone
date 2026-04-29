@@ -1,0 +1,15 @@
+{
+  "best_top_5pct_recall": 0.39574468085106385,
+  "best_params": {
+    "hidden_channels": 128,
+    "num_heads": 2,
+    "dropout": 0.21621159087579556,
+    "drop_edge_prob": 0.30061413828907585,
+    "learning_rate": 0.0005981364320010053,
+    "weight_decay": 1.0969671773921393e-05,
+    "ranking_loss_weight": 0.1,
+    "ranking_margin": 0.04568004906727538,
+    "weight_mode": "quadratic",
+    "weight_scale": 4.769499605360235
+  }
+}
