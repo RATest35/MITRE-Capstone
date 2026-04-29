@@ -2,7 +2,7 @@ import random
 import networkx as nx
 import pandas as pd
 
-DATA_PATH = r""
+DATA_PATH = r"cleaned_flows.csv"
 SEED = 74
 random.seed(SEED)
 

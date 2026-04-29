@@ -2,8 +2,8 @@ import networkx as nx
 import time
 
 # Change path to the graphml file
-INPUT_PATH = ''
-OUTPUT_PATH = ''
+INPUT_PATH = 'ip_graph_23511_nodes_66863_edges_seed74.graphml'
+OUTPUT_PATH = 'composite_score_with_bytes_per_sec.graphml'
 
 def to_float(value):
     try:

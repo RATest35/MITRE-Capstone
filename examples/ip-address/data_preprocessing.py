@@ -1,8 +1,8 @@
 import pandas as pd
 from pathlib import Path
 
-INPUT_FILE = ""
-OUTPUT_FILE = "cleaned_flows.csv"
+INPUT_FILE = r""
+OUTPUT_FILE = r"cleaned_flows.csv"
 
 class FlowDataPreprocessor:
     def __init__(self, chunksize=200_000):
@@ -99,13 +99,14 @@ class FlowDataPreprocessor:
         for chunk in pd.read_csv(cleaned_csv, chunksize=self.chunksize, low_memory=False):
             grouped = (
                 chunk.groupby(["Source.IP", "Destination.IP"], as_index=False)
-                .agg(
-                    total_fwd_packet_length=("Total.Length.of.Fwd.Packets", "sum"),
-                    total_flow_bytes_s=("Flow.Bytes.s", "sum"),
-                    flow_count=("Flow.ID", "count")
-                )
+                .agg({
+                    "Total.Length.of.Fwd.Packets": "sum",
+                    "Flow.Bytes.s": "sum",
+                    "Flow.ID": "count"
+                })
             )
-            agg_parts.append(grouped)
+
+            grouped.rename(columns={"Flow.ID": "Flow.Count"}, inplace=True)
 
         if not agg_parts:
             print("No data found to aggregate.")
@@ -115,11 +116,11 @@ class FlowDataPreprocessor:
 
         final_grouped = (
             combined.groupby(["Source.IP", "Destination.IP"], as_index=False)
-            .agg(
-                total_fwd_packet_length=("total_fwd_packet_length", "sum"),
-                total_flow_bytes_s=("total_flow_bytes_s", "sum"),
-                flow_count=("flow_count", "sum")
-            )
+            .agg({
+                "Total.Length.of.Fwd.Packets": "sum",
+                "Flow.Bytes.s": "sum",
+                "Flow.Count": "sum"
+            })
         )
 
         final_grouped.to_csv(output_csv, index=False)
