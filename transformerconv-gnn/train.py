@@ -14,13 +14,14 @@ from model import TransformerConvGNN
 
 DEFAULT_LAYER_DIMS = [128, 96, 64, 32]
 
+BASE_DIR = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------
 # Parse the minimum set of CLI arguments for training.
 # ---------------------------------------------------------
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--graphml-path", type=Path, default=Path("transformerconv-gnn/dataset/composite_score_with_bytes_per_sec.graphml"))
+    parser.add_argument("--graphml-path", type=Path, default=BASE_DIR.parent / "examples" / "ip-address" / "composite_score_with_bytes_per_sec.graphml")
     parser.add_argument("--output-path", type=Path, default=Path("transformerconv-gnn/composite_score_gnn.pt"))
     parser.add_argument("--layer-dims", type=int, nargs="+", default=DEFAULT_LAYER_DIMS)
     parser.add_argument("--dropout", type=float, default=0.1)
