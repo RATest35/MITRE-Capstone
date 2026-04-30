@@ -6,6 +6,8 @@ from torch_geometric.nn import PNAConv
 
 
 class PNAGNN(nn.Module):
+    """PNA regressor for composite score prediction."""
+
     # ---------------------------------------------------------
     # Build the PNA encoder, message-passing stack, and head.
     # ---------------------------------------------------------
@@ -17,6 +19,7 @@ class PNAGNN(nn.Module):
         dropout: float,
         degree_histogram: torch.Tensor,
     ) -> None:
+        """Initialize the encoder, PNA layers, and head."""
         super().__init__()
 
         aggregators = ["mean", "min", "max", "std"]
@@ -62,6 +65,7 @@ class PNAGNN(nn.Module):
         edge_index: torch.Tensor,
         edge_weight: torch.Tensor,
     ) -> torch.Tensor:
+        """Predict log composite score for each node."""
         hidden = self.encoder(x)
         edge_attr = edge_weight.unsqueeze(-1)
 

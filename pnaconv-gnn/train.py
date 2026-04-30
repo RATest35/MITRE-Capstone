@@ -19,6 +19,7 @@ from model import PNAGNN
 # Parse the minimum set of CLI arguments for training.
 # ---------------------------------------------------------
 def parse_args() -> argparse.Namespace:
+    """Parse command-line options for PNA training."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--graphml-path", type=Path, default=Path("pnaconv-gnn/dataset/composite_risk.graphml"))
     parser.add_argument("--output-path", type=Path, default=Path("pnaconv-gnn/composite_score_gnn.pt"))
@@ -42,6 +43,7 @@ def parse_args() -> argparse.Namespace:
 def prepare_dataset(
     args: argparse.Namespace,
 ) -> tuple[GraphDataset, torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
+    """Load, split, and standardize the graph dataset."""
     raw_dataset = load_graph_dataset(args.graphml_path)
     train_indices, val_indices, test_indices = subnet_group_split(
         group_keys=raw_dataset.group_keys,
@@ -75,6 +77,7 @@ def build_loader(
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:
+    """Build a rooted-subgraph data loader."""
     rooted_dataset = RootedSubgraphDataset(
         graph_dataset=dataset,
         node_indices=node_indices,
@@ -91,6 +94,7 @@ def build_degree_histogram(
     dataset: GraphDataset,
     allowed_node_indices: np.ndarray,
 ) -> torch.Tensor:
+    """Build the degree histogram for PNA scalers."""
     allowed_set = set(int(index) for index in allowed_node_indices.tolist())
     edge_pairs = [
         [source_index, target_index]
@@ -119,6 +123,7 @@ def run_epoch(
     optimizer: Adam | None,
     device: torch.device,
 ) -> float:
+    """Run one training or evaluation epoch."""
     criterion = nn.MSELoss()
     total_loss = 0.0
     total_count = 0
@@ -150,6 +155,7 @@ def evaluate_ranking(
     loader: DataLoader,
     device: torch.device,
 ) -> dict[str, float]:
+    """Compute top-risk retrieval metrics."""
     predictions: list[torch.Tensor] = []
     targets: list[torch.Tensor] = []
 
@@ -188,6 +194,7 @@ def evaluate_ranking(
 # Train the model, track the best validation loss, and save it.
 # ---------------------------------------------------------
 def main() -> None:
+    """Train and save the PNA model."""
     args = parse_args()
     torch.manual_seed(args.seed)
     device = torch.device(
