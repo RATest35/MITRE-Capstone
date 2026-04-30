@@ -57,17 +57,13 @@ def build_graph(df: pd.DataFrame) -> nx.DiGraph:
     return G
 
 
-# ---------------------------------------------------------
-# Extract largest component
-# ---------------------------------------------------------
+
 def largest_component(G: nx.DiGraph) -> nx.DiGraph:
     cc = max(nx.weakly_connected_components(G), key=len)
     return G.subgraph(cc).copy()
 
 
-# ---------------------------------------------------------
-# Compute node flow metrics
-# ---------------------------------------------------------
+
 def add_flow_metrics(G: nx.DiGraph) -> nx.DiGraph:
     for n in G.nodes():
         in_flow = sum(data.get("flow", 0.0) for _, _, data in G.in_edges(n, data=True))
@@ -80,18 +76,14 @@ def add_flow_metrics(G: nx.DiGraph) -> nx.DiGraph:
     return G
 
 
-# ---------------------------------------------------------
-# Add node risk probability
-# ---------------------------------------------------------
+
 def add_random_probability(G: nx.DiGraph) -> nx.DiGraph:
     for n in G.nodes():
         G.nodes[n]["random_probability"] = bell_curve_probability()
     return G
 
 
-# ---------------------------------------------------------
-# Main pipeline
-# ---------------------------------------------------------
+
 def main():
     df = load_and_aggregate_data(DATA_PATH)
 
