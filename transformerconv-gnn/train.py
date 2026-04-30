@@ -19,6 +19,7 @@ DEFAULT_LAYER_DIMS = [128, 96, 64, 32]
 # Parse the minimum set of CLI arguments for training.
 # ---------------------------------------------------------
 def parse_args() -> argparse.Namespace:
+    """Parse command-line options for TransformerConv training."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--graphml-path", type=Path, default=Path("transformerconv-gnn/dataset/composite_score_with_bytes_per_sec.graphml"))
     parser.add_argument("--output-path", type=Path, default=Path("transformerconv-gnn/composite_score_gnn.pt"))
@@ -43,6 +44,7 @@ def parse_args() -> argparse.Namespace:
 def prepare_dataset(
     args: argparse.Namespace,
 ) -> tuple[GraphDataset, torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
+    """Load, split, and standardize the graph dataset."""
     raw_dataset = load_graph_dataset(
         args.graphml_path,
         sample_weight_max=args.sample_weight_max,
@@ -79,6 +81,7 @@ def build_loader(
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:
+    """Build a rooted-subgraph data loader."""
     rooted_dataset = RootedSubgraphDataset(
         graph_dataset=dataset,
         node_indices=node_indices,
@@ -96,6 +99,7 @@ def compute_weighted_mse_loss(
     targets: torch.Tensor,
     weights: torch.Tensor,
 ) -> torch.Tensor:
+    """Compute sample-weighted mean squared error."""
     squared_errors = (predictions - targets).pow(2)
     weighted_errors = squared_errors * weights
     return weighted_errors.sum() / weights.sum().clamp_min(1e-12)
@@ -109,6 +113,7 @@ def compute_pairwise_ranking_loss(
     targets: torch.Tensor,
     weights: torch.Tensor,
 ) -> torch.Tensor:
+    """Compute weighted pairwise ranking loss."""
     target_differences = targets.unsqueeze(1) - targets.unsqueeze(0)
     pair_mask = target_differences > 0
 
@@ -131,6 +136,7 @@ def compute_batch_loss(
     weights: torch.Tensor,
     ranking_alpha: float,
 ) -> torch.Tensor:
+    """Combine regression and ranking losses."""
     regression_loss = compute_weighted_mse_loss(predictions, targets, weights)
     ranking_loss = compute_pairwise_ranking_loss(predictions, targets, weights)
     return regression_loss + ranking_alpha * ranking_loss
@@ -146,6 +152,7 @@ def run_epoch(
     device: torch.device,
     ranking_alpha: float,
 ) -> float:
+    """Run one training or evaluation epoch."""
     total_loss = 0.0
     total_count = 0
     model.train() if optimizer is not None else model.eval()
@@ -184,6 +191,7 @@ def evaluate_ranking(
     loader: DataLoader,
     device: torch.device,
 ) -> dict[str, float]:
+    """Compute top-risk retrieval metrics."""
     predictions: list[torch.Tensor] = []
     targets: list[torch.Tensor] = []
 
@@ -222,6 +230,7 @@ def evaluate_ranking(
 # Train the model, track the best validation loss, and save it.
 # ---------------------------------------------------------
 def main() -> None:
+    """Train and save the TransformerConv model."""
     args = parse_args()
     torch.manual_seed(args.seed)
     device = torch.device(
