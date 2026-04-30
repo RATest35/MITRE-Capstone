@@ -15,6 +15,7 @@ class GraphSAGEGNN(nn.Module):
         num_layers: int,
         dropout: float,
     ) -> None:
+        """Initialize the encoder, GraphSAGE layers, and head."""
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),

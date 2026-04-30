@@ -17,6 +17,8 @@ EPSILON: float = 1e-6
 
 @dataclass(frozen=True)
 class GraphDataset:
+    """Store graph tensors and adjacency lists for GNN training."""
+
     node_ids: list[str]
     node_id_to_index: dict[str, int]
     group_keys: list[str]
@@ -30,6 +32,8 @@ class GraphDataset:
 
 @dataclass(frozen=True)
 class SamplerConfig:
+    """Configure rooted subgraph neighbor sampling."""
+
     num_hops: int
     max_in_neighbors: int
     max_out_neighbors: int
@@ -39,6 +43,7 @@ class SamplerConfig:
 # Convert GraphML values to float without extra fallback logic.
 # ---------------------------------------------------------
 def _safe_float(value: object) -> float:
+    """Convert a GraphML value to a float."""
     return 0.0 if value is None else float(value)
 
 
@@ -46,6 +51,7 @@ def _safe_float(value: object) -> float:
 # Build a stable split key from the IPv4 prefix.
 # ---------------------------------------------------------
 def _group_key(node_id: str, prefix_len: int) -> str:
+    """Create a stable subnet key for splitting nodes."""
     parsed = ip_address(node_id)
     return ".".join(str(parsed).split(".")[:prefix_len]) if parsed.version == 4 else node_id
 
@@ -58,6 +64,7 @@ def _feature_row(
     in_neighbors: list[tuple[int, float]],
     out_neighbors: list[tuple[int, float]],
 ) -> list[float]:
+    """Build log-scaled structural and flow features."""
     in_degree = float(len(in_neighbors))
     out_degree = float(len(out_neighbors))
     in_flow = float(sum(flow for _, flow in in_neighbors))
@@ -74,6 +81,7 @@ def _feature_row(
 # Load the directed graph and convert it to training tensors.
 # ---------------------------------------------------------
 def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDataset:
+    """Load GraphML data into tensors and neighbor lists."""
     directed_graph = nx.DiGraph(nx.read_graphml(graphml_path))
     node_ids = list(directed_graph.nodes())
     node_id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
@@ -124,6 +132,7 @@ def load_graph_dataset(graphml_path: Path, split_prefix_len: int = 2) -> GraphDa
 # Standardize node features with train split statistics only.
 # ---------------------------------------------------------
 def standardize_features(features: torch.Tensor, train_indices: np.ndarray) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Standardize features using train split statistics."""
     train_tensor = features[torch.as_tensor(train_indices, dtype=torch.long)]
     mean = train_tensor.mean(dim=0)
     std = train_tensor.std(dim=0).clamp_min(EPSILON)
@@ -139,6 +148,7 @@ def subnet_group_split(
     val_ratio: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Split node indices by subnet group."""
     grouped_indices: dict[str, list[int]] = {}
     for node_index, group_key in enumerate(group_keys):
         grouped_indices.setdefault(group_key, []).append(node_index)
@@ -164,6 +174,8 @@ def subnet_group_split(
 
 
 class RootedSubgraphDataset(Dataset[Data]):
+    """Create PyG rooted subgraph samples from graph tensors."""
+
     # ---------------------------------------------------------
     # Store graph tensors and rooted subgraph sampling settings.
     # ---------------------------------------------------------
@@ -174,6 +186,7 @@ class RootedSubgraphDataset(Dataset[Data]):
         allowed_node_indices: np.ndarray,
         sampler_config: SamplerConfig,
     ) -> None:
+        """Store graph data and sampling constraints."""
         self.graph_dataset = graph_dataset
         self.node_indices = node_indices
         self.allowed_mask = np.zeros(len(graph_dataset.node_ids), dtype=np.bool_)
@@ -184,12 +197,14 @@ class RootedSubgraphDataset(Dataset[Data]):
     # Return the number of root nodes in this split.
     # ---------------------------------------------------------
     def __len__(self) -> int:
+        """Return the number of root nodes."""
         return len(self.node_indices)
 
     # ---------------------------------------------------------
     # Build one rooted subgraph sample for PyG training.
     # ---------------------------------------------------------
     def __getitem__(self, item: int) -> Data:
+        """Build one rooted subgraph sample."""
         root_index = int(self.node_indices[item])
         sampled_nodes = self._sample_nodes(root_index)
         local_index = {node_index: offset for offset, node_index in enumerate(sampled_nodes)}
@@ -230,6 +245,7 @@ class RootedSubgraphDataset(Dataset[Data]):
     # Collect the root node and its local in/out neighbors.
     # ---------------------------------------------------------
     def _sample_nodes(self, root_index: int) -> list[int]:
+        """Sample local in and out neighbors around a root node."""
         sampled_nodes = [root_index]
         seen = {root_index}
         frontier = [root_index]
