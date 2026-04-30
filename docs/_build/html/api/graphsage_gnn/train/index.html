@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>graphsage_gnn.train &#8212; MITRE Capstone GNN 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="transformerconv_gnn" href="../../transformerconv_gnn/index.html" />
+    <link rel="prev" title="graphsage_gnn.model" href="../model/index.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-graphsage_gnn.train">
+<span id="graphsage-gnn-train"></span><h1>graphsage_gnn.train<a class="headerlink" href="#module-graphsage_gnn.train" title="Link to this heading">¶</a></h1>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#graphsage_gnn.train.parse_args" title="graphsage_gnn.train.parse_args"><code class="xref py py-obj docutils literal notranslate"><span class="pre">parse_args</span></code></a>(→ argparse.Namespace)</p></td>
+<td><p>Parse command-line options for GraphSAGE training.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#graphsage_gnn.train.prepare_dataset" title="graphsage_gnn.train.prepare_dataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prepare_dataset</span></code></a>(→ tuple[dataset.GraphDataset, ...)</p></td>
+<td><p>Load, split, and standardize the graph dataset.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#graphsage_gnn.train.build_loader" title="graphsage_gnn.train.build_loader"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_loader</span></code></a>(→ torch_geometric.loader.DataLoader)</p></td>
+<td><p>Build a rooted-subgraph data loader.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#graphsage_gnn.train.run_epoch" title="graphsage_gnn.train.run_epoch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_epoch</span></code></a>(→ float)</p></td>
+<td><p>Run one training or evaluation epoch.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#graphsage_gnn.train.evaluate_ranking" title="graphsage_gnn.train.evaluate_ranking"><code class="xref py py-obj docutils literal notranslate"><span class="pre">evaluate_ranking</span></code></a>(→ dict[str, float])</p></td>
+<td><p>Compute top-risk retrieval metrics.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#graphsage_gnn.train.main" title="graphsage_gnn.train.main"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main</span></code></a>(→ None)</p></td>
+<td><p>Train and save the GraphSAGE model.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="graphsage_gnn.train.parse_args">
+<span class="sig-prename descclassname"><span class="pre">graphsage_gnn.train.</span></span><span class="sig-name descname"><span class="pre">parse_args</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">argparse.Namespace</span></span></span><a class="headerlink" href="#graphsage_gnn.train.parse_args" title="Link to this definition">¶</a></dt>
+<dd><p>Parse command-line options for GraphSAGE training.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Parsed command-line arguments.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="graphsage_gnn.train.prepare_dataset">
+<span class="sig-prename descclassname"><span class="pre">graphsage_gnn.train.</span></span><span class="sig-name descname"><span class="pre">prepare_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">argparse.Namespace</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../dataset/index.html#graphsage_gnn.dataset.GraphDataset" title="graphsage_gnn.dataset.GraphDataset"><span class="pre">dataset.GraphDataset</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#graphsage_gnn.train.prepare_dataset" title="Link to this definition">¶</a></dt>
+<dd><p>Load, split, and standardize the graph dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>args</strong> – Parsed training arguments.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dataset, feature mean, feature standard deviation, and split indices.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="graphsage_gnn.train.build_loader">
+<span class="sig-prename descclassname"><span class="pre">graphsage_gnn.train.</span></span><span class="sig-name descname"><span class="pre">build_loader</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../dataset/index.html#graphsage_gnn.dataset.GraphDataset" title="graphsage_gnn.dataset.GraphDataset"><span class="pre">dataset.GraphDataset</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allowed_node_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampler_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../dataset/index.html#graphsage_gnn.dataset.SamplerConfig" title="graphsage_gnn.dataset.SamplerConfig"><span class="pre">dataset.SamplerConfig</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shuffle</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch_geometric.loader.DataLoader</span></span></span><a class="headerlink" href="#graphsage_gnn.train.build_loader" title="Link to this definition">¶</a></dt>
+<dd><p>Build a rooted-subgraph data loader.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> – Full graph dataset.</p></li>
+<li><p><strong>node_indices</strong> – Root node indices exposed by the loader.</p></li>
+<li><p><strong>allowed_node_indices</strong> – Node indices allowed during sampling.</p></li>
+<li><p><strong>sampler_config</strong> – Rooted subgraph sampling configuration.</p></li>
+<li><p><strong>batch_size</strong> – Number of samples per batch.</p></li>
+<li><p><strong>shuffle</strong> – Whether to shuffle the dataset.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>PyG data loader for rooted subgraphs.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="graphsage_gnn.train.run_epoch">
+<span class="sig-prename descclassname"><span class="pre">graphsage_gnn.train.</span></span><span class="sig-name descname"><span class="pre">run_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../model/index.html#graphsage_gnn.model.GraphSAGEGNN" title="graphsage_gnn.model.GraphSAGEGNN"><span class="pre">model.GraphSAGEGNN</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">loader</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch_geometric.loader.DataLoader</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.optim.Adam</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.device</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#graphsage_gnn.train.run_epoch" title="Link to this definition">¶</a></dt>
+<dd><p>Run one training or evaluation epoch.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> – GraphSAGE model.</p></li>
+<li><p><strong>loader</strong> – Data loader for a split.</p></li>
+<li><p><strong>optimizer</strong> – Optimizer for training, or <code class="docutils literal notranslate"><span class="pre">None</span></code> for evaluation.</p></li>
+<li><p><strong>device</strong> – Device used for tensor computation.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Average masked loss for the epoch.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="graphsage_gnn.train.evaluate_ranking">
+<span class="sig-prename descclassname"><span class="pre">graphsage_gnn.train.</span></span><span class="sig-name descname"><span class="pre">evaluate_ranking</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../model/index.html#graphsage_gnn.model.GraphSAGEGNN" title="graphsage_gnn.model.GraphSAGEGNN"><span class="pre">model.GraphSAGEGNN</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">loader</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch_geometric.loader.DataLoader</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.device</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#graphsage_gnn.train.evaluate_ranking" title="Link to this definition">¶</a></dt>
+<dd><p>Compute top-risk retrieval metrics.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> – GraphSAGE model.</p></li>
+<li><p><strong>loader</strong> – Data loader for a split.</p></li>
+<li><p><strong>device</strong> – Device used for tensor computation.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Precision and NDCG metrics at the top five percent.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="graphsage_gnn.train.main">
+<span class="sig-prename descclassname"><span class="pre">graphsage_gnn.train.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#graphsage_gnn.train.main" title="Link to this definition">¶</a></dt>
+<dd><p>Train and save the GraphSAGE model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">MITRE Capstone GNN</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../pnaconv_gnn/index.html">pnaconv_gnn</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../index.html">graphsage_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../transformerconv_gnn/index.html">transformerconv_gnn</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">API Reference</a><ul>
+  <li><a href="../index.html">graphsage_gnn</a><ul>
+      <li>Previous: <a href="../model/index.html" title="previous chapter">graphsage_gnn.model</a></li>
+      <li>Next: <a href="../../transformerconv_gnn/index.html" title="next chapter">transformerconv_gnn</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../../_sources/api/graphsage_gnn/train/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
