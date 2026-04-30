@@ -6,7 +6,12 @@ from torch_geometric.nn import TransformerConv
 
 
 class TransformerConvGNN(nn.Module):
-    """TransformerConv regressor for composite score prediction."""
+    """TransformerConv regressor for composite score prediction.
+
+    :param input_dim: Number of input node features.
+    :param layer_dims: Hidden dimensions for TransformerConv layers.
+    :param dropout: Dropout probability.
+    """
 
     def __init__(
         self,
@@ -14,7 +19,13 @@ class TransformerConvGNN(nn.Module):
         layer_dims: list[int],
         dropout: float,
     ) -> None:
-        """Initialize edge-aware TransformerConv layers and head."""
+        """Initialize edge-aware TransformerConv layers and head.
+
+        :param input_dim: Number of input node features.
+        :param layer_dims: Hidden dimensions for TransformerConv layers.
+        :param dropout: Dropout probability.
+        :return: None.
+        """
         super().__init__()
         first_hidden_dim = layer_dims[0]
         layer_pairs = list(zip(layer_dims[:-1], layer_dims[1:]))
@@ -63,7 +74,13 @@ class TransformerConvGNN(nn.Module):
         edge_index: torch.Tensor,
         edge_attr: torch.Tensor,
     ) -> torch.Tensor:
-        """Predict log composite score for each node."""
+        """Predict log composite score for each node.
+
+        :param x: Node feature matrix.
+        :param edge_index: Graph connectivity in COO format.
+        :param edge_attr: Edge feature matrix.
+        :return: Predicted log composite score for each node.
+        """
         # ---------------------------------------------------------
         # Encode node features before graph message passing.
         # ---------------------------------------------------------

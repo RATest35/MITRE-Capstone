@@ -17,7 +17,18 @@ EPSILON: float = 1e-6
 
 @dataclass(frozen=True)
 class GraphDataset:
-    """Store graph tensors and edge-attributed adjacency lists."""
+    """Store graph tensors and edge-attributed adjacency lists.
+
+    :ivar node_ids: Ordered node identifiers from the graph.
+    :ivar node_id_to_index: Mapping from node identifier to tensor index.
+    :ivar group_keys: Split group keys for each node.
+    :ivar features: Node feature matrix.
+    :ivar targets: Log-scaled target values.
+    :ivar raw_targets: Original target values from GraphML.
+    :ivar sample_weights: Per-node sample weights.
+    :ivar in_neighbors: Incoming neighbors, flow, and bytes-per-second values.
+    :ivar out_neighbors: Outgoing neighbors, flow, and bytes-per-second values.
+    """
 
     node_ids: list[str]
     node_id_to_index: dict[str, int]
@@ -32,7 +43,12 @@ class GraphDataset:
 
 @dataclass(frozen=True)
 class SamplerConfig:
-    """Configure rooted subgraph neighbor sampling."""
+    """Configure rooted subgraph neighbor sampling.
+
+    :ivar num_hops: Number of sampling hops from the root node.
+    :ivar max_in_neighbors: Maximum incoming neighbors per node.
+    :ivar max_out_neighbors: Maximum outgoing neighbors per node.
+    """
 
     num_hops: int
     max_in_neighbors: int
@@ -43,7 +59,11 @@ class SamplerConfig:
 # Convert GraphML values to float without extra fallback logic.
 # ---------------------------------------------------------
 def _safe_float(value: object) -> float:
-    """Convert a GraphML value to a float."""
+    """Convert a GraphML value to a float.
+
+    :param value: Raw GraphML attribute value.
+    :return: Converted floating-point value.
+    """
     return 0.0 if value is None else float(value)
 
 
@@ -51,7 +71,12 @@ def _safe_float(value: object) -> float:
 # Build a stable split key from the IPv4 prefix.
 # ---------------------------------------------------------
 def _group_key(node_id: str, prefix_len: int) -> str:
-    """Create a stable subnet key for splitting nodes."""
+    """Create a stable subnet key for splitting nodes.
+
+    :param node_id: Node identifier, usually an IP address.
+    :param prefix_len: Number of IPv4 octets to keep.
+    :return: Split group key for the node.
+    """
     parsed = ip_address(node_id)
     return ".".join(str(parsed).split(".")[:prefix_len]) if parsed.version == 4 else node_id
 
@@ -64,7 +89,12 @@ def _feature_row(
     in_neighbors: list[tuple[int, float, float]],
     out_neighbors: list[tuple[int, float, float]],
 ) -> list[float]:
-    """Build log-scaled structural and flow features."""
+    """Build log-scaled structural and flow features.
+
+    :param in_neighbors: Incoming neighbors, flow, and bytes-per-second values.
+    :param out_neighbors: Outgoing neighbors, flow, and bytes-per-second values.
+    :return: Feature row for one node.
+    """
     in_degree = float(len(in_neighbors))
     out_degree = float(len(out_neighbors))
     in_flow = float(sum(flow for _, flow, _ in in_neighbors))
@@ -84,7 +114,12 @@ def _build_sample_weights(
     raw_targets: torch.Tensor,
     sample_weight_max: float,
 ) -> torch.Tensor:
-    """Create target-rank sample weights."""
+    """Create target-rank sample weights.
+
+    :param raw_targets: Original target values.
+    :param sample_weight_max: Maximum allowed sample weight.
+    :return: Per-node sample weights.
+    """
     sorted_indices = torch.argsort(raw_targets)
     rank_positions = torch.empty_like(sorted_indices, dtype=torch.float32)
     rank_positions[sorted_indices] = torch.arange(len(raw_targets), dtype=torch.float32)
@@ -101,7 +136,13 @@ def load_graph_dataset(
     split_prefix_len: int = 2,
     sample_weight_max: float = 5.0,
 ) -> GraphDataset:
-    """Load GraphML data into tensors and edge-attributed neighbors."""
+    """Load GraphML data into tensors and edge-attributed neighbors.
+
+    :param graphml_path: Path to the GraphML file.
+    :param split_prefix_len: Number of IPv4 octets used for split groups.
+    :param sample_weight_max: Maximum target-rank sample weight.
+    :return: Loaded graph dataset.
+    """
     directed_graph = nx.DiGraph(nx.read_graphml(graphml_path))
     node_ids = list(directed_graph.nodes())
     node_id_to_index = {node_id: index for index, node_id in enumerate(node_ids)}
@@ -154,7 +195,12 @@ def load_graph_dataset(
 # Standardize node features with train split statistics only.
 # ---------------------------------------------------------
 def standardize_features(features: torch.Tensor, train_indices: np.ndarray) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Standardize features using train split statistics."""
+    """Standardize features using train split statistics.
+
+    :param features: Full node feature matrix.
+    :param train_indices: Node indices used to compute statistics.
+    :return: Standardized features, feature mean, and feature standard deviation.
+    """
     train_tensor = features[torch.as_tensor(train_indices, dtype=torch.long)]
     mean = train_tensor.mean(dim=0)
     std = train_tensor.std(dim=0).clamp_min(EPSILON)
@@ -170,7 +216,14 @@ def subnet_group_split(
     val_ratio: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Split node indices by subnet group."""
+    """Split node indices by subnet group.
+
+    :param group_keys: Split group key for each node.
+    :param train_ratio: Ratio of groups assigned to training.
+    :param val_ratio: Ratio of groups assigned to validation.
+    :param seed: Random seed for group shuffling.
+    :return: Train, validation, and test node indices.
+    """
     grouped_indices: dict[str, list[int]] = {}
     for node_index, group_key in enumerate(group_keys):
         grouped_indices.setdefault(group_key, []).append(node_index)
@@ -196,7 +249,13 @@ def subnet_group_split(
 
 
 class RootedSubgraphDataset(Dataset[Data]):
-    """Create PyG rooted subgraph samples with edge attributes."""
+    """Create PyG rooted subgraph samples with edge attributes.
+
+    :param graph_dataset: Full graph dataset.
+    :param node_indices: Root node indices exposed by this dataset.
+    :param allowed_node_indices: Node indices allowed during sampling.
+    :param sampler_config: Rooted subgraph sampling configuration.
+    """
 
     # ---------------------------------------------------------
     # Store graph tensors and rooted subgraph sampling settings.
@@ -208,7 +267,14 @@ class RootedSubgraphDataset(Dataset[Data]):
         allowed_node_indices: np.ndarray,
         sampler_config: SamplerConfig,
     ) -> None:
-        """Store graph data and sampling constraints."""
+        """Store graph data and sampling constraints.
+
+        :param graph_dataset: Full graph dataset.
+        :param node_indices: Root node indices exposed by this dataset.
+        :param allowed_node_indices: Node indices allowed during sampling.
+        :param sampler_config: Rooted subgraph sampling configuration.
+        :return: None.
+        """
         self.graph_dataset = graph_dataset
         self.node_indices = node_indices
         self.allowed_mask = np.zeros(len(graph_dataset.node_ids), dtype=np.bool_)
@@ -219,14 +285,21 @@ class RootedSubgraphDataset(Dataset[Data]):
     # Return the number of root nodes in this split.
     # ---------------------------------------------------------
     def __len__(self) -> int:
-        """Return the number of root nodes."""
+        """Return the number of root nodes.
+
+        :return: Number of root nodes.
+        """
         return len(self.node_indices)
 
     # ---------------------------------------------------------
     # Build one rooted subgraph sample for PyG training.
     # ---------------------------------------------------------
     def __getitem__(self, item: int) -> Data:
-        """Build one rooted subgraph sample."""
+        """Build one rooted subgraph sample.
+
+        :param item: Position of the root node in this dataset.
+        :return: PyG data object for the sampled rooted subgraph.
+        """
         root_index = int(self.node_indices[item])
         sampled_nodes = self._sample_nodes(root_index)
         local_index = {node_index: offset for offset, node_index in enumerate(sampled_nodes)}
@@ -271,7 +344,11 @@ class RootedSubgraphDataset(Dataset[Data]):
     # Collect the root node and its local in/out neighbors.
     # ---------------------------------------------------------
     def _sample_nodes(self, root_index: int) -> list[int]:
-        """Sample local in and out neighbors around a root node."""
+        """Sample local in and out neighbors around a root node.
+
+        :param root_index: Root node index in the full graph.
+        :return: Sampled node indices with the root node first.
+        """
         sampled_nodes = [root_index]
         seen = {root_index}
         frontier = [root_index]
