@@ -1,61 +1,119 @@
 import random
 import networkx as nx
 import pandas as pd
+from pathlib import Path
 
-DATA_PATH = r"cleaned_flows.csv"
+
+DATA_PATH = Path("cleaned_flows.csv")
 SEED = 74
 random.seed(SEED)
 
-def bell_curve_probability(mean=0.1, std_dev=0.04):
+
+
+def bell_curve_probability(mean: float = 0.1, std_dev: float = 0.04) -> float:
     return max(0.0, min(1.0, random.gauss(mean, std_dev)))
 
-df = pd.read_csv(DATA_PATH,
-                 usecols=["Source.IP","Destination.IP", "Total.Length.of.Fwd.Packets", "Flow.Bytes.s"])
 
-# Csv with source and destination IPs and the sum of the bytes from source to destination stored as flow
-df_sum_flow = df.groupby(["Source.IP", "Destination.IP"], as_index=False).agg(flow=("Total.Length.of.Fwd.Packets", "sum"),
-                                                                               bytes_per_sec=("Flow.Bytes.s", "median"))
 
-G = nx.DiGraph()
-for _, row in df_sum_flow.iterrows():
-    G.add_edge(
-        row["Source.IP"],
-        row["Destination.IP"],
-        flow=row["flow"],
-        bytes_per_sec=row["bytes_per_sec"]
+def load_and_aggregate_data(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(
+        path,
+        usecols=[
+            "Source.IP",
+            "Destination.IP",
+            "Total.Length.of.Fwd.Packets",
+            "Flow.Bytes.s",
+        ],
     )
 
-# Find the largest connected component
-cc = max(nx.weakly_connected_components(G), key=len)
-U = G.subgraph(cc).copy()
+    # Ensure numeric
+    df["Total.Length.of.Fwd.Packets"] = pd.to_numeric(
+        df["Total.Length.of.Fwd.Packets"], errors="coerce"
+    )
+    df["Flow.Bytes.s"] = pd.to_numeric(df["Flow.Bytes.s"], errors="coerce")
+
+    df = df.dropna()
+
+    # Aggregate flows
+    df_agg = df.groupby(
+        ["Source.IP", "Destination.IP"], as_index=False
+    ).agg(
+        flow=("Total.Length.of.Fwd.Packets", "sum"),
+        bytes_per_sec=("Flow.Bytes.s", "median"),
+    )
+
+    return df_agg
 
 
-# Compute flow-loss (importance value) for each node, using in & out edges
-for n in sorted(U.nodes()):
 
-    incoming_flow = 0.0
-    # U.in_edges returns a list of tuples (u, v, data), where data is a list of the attributes stored
-    for src, des, data in U.in_edges(n, data=True):
-        if "flow" in data:
-            incoming_flow += data["flow"]
-        else:
-            incoming_flow += 0.0
-
-    outgoing_flow = 0.0
-    for src, des, data in U.out_edges(n, data=True):
-        if "flow" in data:
-            outgoing_flow += data["flow"]
-        else:
-            outgoing_flow += 0.0
-
-    U.nodes[n]["in_flow"] = incoming_flow
-    U.nodes[n]["out_flow"] = outgoing_flow
-    U.nodes[n]["flow_loss"] = incoming_flow + outgoing_flow
-
-for n in U.nodes():
-    U.nodes[n]["random_probability"] = bell_curve_probability()
+def build_graph(df: pd.DataFrame) -> nx.DiGraph:
+    G = nx.from_pandas_edgelist(
+        df,
+        source="Source.IP",
+        target="Destination.IP",
+        edge_attr=["flow", "bytes_per_sec"],
+        create_using=nx.DiGraph(),
+    )
+    return G
 
 
-# Write out H as a graphml file
-nx.write_graphml(U, f"ip_graph_{len(U.nodes())}_nodes_{len(U.edges())}_edges_seed{SEED}.graphml")
-print("Nodes:", U.number_of_nodes(), "Edges:", U.number_of_edges(), "Seed:", SEED)
+# ---------------------------------------------------------
+# Extract largest component
+# ---------------------------------------------------------
+def largest_component(G: nx.DiGraph) -> nx.DiGraph:
+    cc = max(nx.weakly_connected_components(G), key=len)
+    return G.subgraph(cc).copy()
+
+
+# ---------------------------------------------------------
+# Compute node flow metrics
+# ---------------------------------------------------------
+def add_flow_metrics(G: nx.DiGraph) -> nx.DiGraph:
+    for n in G.nodes():
+        in_flow = sum(data.get("flow", 0.0) for _, _, data in G.in_edges(n, data=True))
+        out_flow = sum(data.get("flow", 0.0) for _, _, data in G.out_edges(n, data=True))
+
+        G.nodes[n]["in_flow"] = float(in_flow)
+        G.nodes[n]["out_flow"] = float(out_flow)
+        G.nodes[n]["flow_loss"] = float(in_flow + out_flow)
+
+    return G
+
+
+# ---------------------------------------------------------
+# Add node risk probability
+# ---------------------------------------------------------
+def add_random_probability(G: nx.DiGraph) -> nx.DiGraph:
+    for n in G.nodes():
+        G.nodes[n]["random_probability"] = bell_curve_probability()
+    return G
+
+
+# ---------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------
+def main():
+    df = load_and_aggregate_data(DATA_PATH)
+
+    G = build_graph(df)
+    G = largest_component(G)
+
+    G = add_flow_metrics(G)
+    G = add_random_probability(G)
+
+    output_path = Path(
+        f"ip_graph_{G.number_of_nodes()}_nodes_{G.number_of_edges()}_edges_seed{SEED}.graphml"
+    )
+
+    nx.write_graphml(G, output_path)
+
+    print("Graph processed successfully")
+    print("Nodes:", G.number_of_nodes())
+    print("Edges:", G.number_of_edges())
+    print("Seed:", SEED)
+    print("Saved to:", output_path)
+
+
+# ---------------------------------------------------------
+if __name__ == "__main__":
+    main()
