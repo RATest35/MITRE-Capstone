@@ -6,7 +6,14 @@ from torch_geometric.nn import PNAConv
 
 
 class PNAGNN(nn.Module):
-    """PNA regressor for composite score prediction."""
+    """PNA regressor for composite score prediction.
+
+    :param input_dim: Number of input node features.
+    :param hidden_dim: Hidden representation size.
+    :param num_layers: Number of PNA message-passing layers.
+    :param dropout: Dropout probability.
+    :param degree_histogram: Degree histogram used by PNA scalers.
+    """
 
     # ---------------------------------------------------------
     # Build the PNA encoder, message-passing stack, and head.
@@ -19,7 +26,15 @@ class PNAGNN(nn.Module):
         dropout: float,
         degree_histogram: torch.Tensor,
     ) -> None:
-        """Initialize the encoder, PNA layers, and head."""
+        """Initialize the encoder, PNA layers, and head.
+
+        :param input_dim: Number of input node features.
+        :param hidden_dim: Hidden representation size.
+        :param num_layers: Number of PNA message-passing layers.
+        :param dropout: Dropout probability.
+        :param degree_histogram: Degree histogram used by PNA scalers.
+        :return: None.
+        """
         super().__init__()
 
         aggregators = ["mean", "min", "max", "std"]
@@ -65,7 +80,13 @@ class PNAGNN(nn.Module):
         edge_index: torch.Tensor,
         edge_weight: torch.Tensor,
     ) -> torch.Tensor:
-        """Predict log composite score for each node."""
+        """Predict log composite score for each node.
+
+        :param x: Node feature matrix.
+        :param edge_index: Graph connectivity in COO format.
+        :param edge_weight: Edge flow weights.
+        :return: Predicted log composite score for each node.
+        """
         hidden = self.encoder(x)
         edge_attr = edge_weight.unsqueeze(-1)
 
