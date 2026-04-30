@@ -18,7 +18,10 @@ from model import GraphSAGEGNN
 # Parse the minimum set of CLI arguments for training.
 # ---------------------------------------------------------
 def parse_args() -> argparse.Namespace:
-    """Parse command-line options for GraphSAGE training."""
+    """Parse command-line options for GraphSAGE training.
+
+    :return: Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--graphml-path", type=Path, default=Path("gnn/dataset/composite_risk.graphml"))
     parser.add_argument("--output-path", type=Path, default=Path("gnn/composite_score_gnn.pt"))
@@ -42,7 +45,11 @@ def parse_args() -> argparse.Namespace:
 def prepare_dataset(
     args: argparse.Namespace,
 ) -> tuple[GraphDataset, torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
-    """Load, split, and standardize the graph dataset."""
+    """Load, split, and standardize the graph dataset.
+
+    :param args: Parsed training arguments.
+    :return: Dataset, feature mean, feature standard deviation, and split indices.
+    """
     raw_dataset = load_graph_dataset(args.graphml_path)
     train_indices, val_indices, test_indices = subnet_group_split(
         group_keys=raw_dataset.group_keys,
@@ -76,7 +83,16 @@ def build_loader(
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:
-    """Build a rooted-subgraph data loader."""
+    """Build a rooted-subgraph data loader.
+
+    :param dataset: Full graph dataset.
+    :param node_indices: Root node indices exposed by the loader.
+    :param allowed_node_indices: Node indices allowed during sampling.
+    :param sampler_config: Rooted subgraph sampling configuration.
+    :param batch_size: Number of samples per batch.
+    :param shuffle: Whether to shuffle the dataset.
+    :return: PyG data loader for rooted subgraphs.
+    """
     rooted_dataset = RootedSubgraphDataset(
         graph_dataset=dataset,
         node_indices=node_indices,
@@ -95,7 +111,14 @@ def run_epoch(
     optimizer: Adam | None,
     device: torch.device,
 ) -> float:
-    """Run one training or evaluation epoch."""
+    """Run one training or evaluation epoch.
+
+    :param model: GraphSAGE model.
+    :param loader: Data loader for a split.
+    :param optimizer: Optimizer for training, or ``None`` for evaluation.
+    :param device: Device used for tensor computation.
+    :return: Average masked loss for the epoch.
+    """
     criterion = nn.MSELoss()
     total_loss = 0.0
     total_count = 0
@@ -127,7 +150,13 @@ def evaluate_ranking(
     loader: DataLoader,
     device: torch.device,
 ) -> dict[str, float]:
-    """Compute top-risk retrieval metrics."""
+    """Compute top-risk retrieval metrics.
+
+    :param model: GraphSAGE model.
+    :param loader: Data loader for a split.
+    :param device: Device used for tensor computation.
+    :return: Precision and NDCG metrics at the top five percent.
+    """
     predictions: list[torch.Tensor] = []
     targets: list[torch.Tensor] = []
 
@@ -166,7 +195,10 @@ def evaluate_ranking(
 # Train the model, track the best validation loss, and save it.
 # ---------------------------------------------------------
 def main() -> None:
-    """Train and save the GraphSAGE model."""
+    """Train and save the GraphSAGE model.
+
+    :return: None.
+    """
     args = parse_args()
     torch.manual_seed(args.seed)
     device = torch.device(
