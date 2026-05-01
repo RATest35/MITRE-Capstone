@@ -14,6 +14,7 @@ from torch_geometric.loader import DataLoader
 from dataset import GraphDataset, RootedSubgraphDataset, SamplerConfig, load_graph_dataset, standardize_features, subnet_group_split
 from model import PNAGNN
 
+BASE_DIR = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------
 # Parse the minimum set of CLI arguments for training.
@@ -24,7 +25,8 @@ def parse_args() -> argparse.Namespace:
     :return: Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--graphml-path", type=Path, default=Path("pnaconv-gnn/dataset/composite_risk.graphml"))
+    parser.add_argument("--graphml-path", type=Path, default=BASE_DIR.parent / "examples" / "ip-address" / "composite_score_with_bytes_per_sec.graphml")
+
     parser.add_argument("--output-path", type=Path, default=Path("pnaconv-gnn/composite_score_gnn.pt"))
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--num-layers", type=int, default=2)
