@@ -1,4 +1,11 @@
-"""Training loop and evaluation for the GATv2 pipeline with K-fold CV."""
+"""K-fold training, MC-Dropout inference, and evaluation for the GATv2 pipeline.
+
+Public entry point is :func:`train_and_evaluate`. The training loss is a
+sample-weighted Huber loss, optionally combined with a pairwise ranking hinge
+loss (controlled by ``RANKING_LOSS_WEIGHT``). Best model per fold is selected
+by ``SELECTION_METRIC`` on the validation split, then MC-Dropout is used to
+estimate per-node failure probability (uncertainty proxy).
+"""
  
 from __future__ import annotations
  
@@ -45,15 +52,31 @@ _HIGHER_IS_BETTER: set[str] = {
 def train_and_evaluate(
     base_data: Data, node_ids: list[str],
 ) -> tuple[list[dict[str, float]], list[PredictionRow]]:
-    """Train and evaluate a GATv2Regressor using K-fold cross-validation.
- 
-    For each fold the function:
-      1. Applies fold-specific train/val/test masks
-      2. Standardises node features on the training split
-      3. Trains with early stopping (Huber loss + sample weights + optional ranking loss)
-      4. Runs MC Dropout inference for failure probability
-      5. Collects per-fold metrics and test-node predictions
- 
+    """Run K-fold cross-validation training and inference.
+
+    For each fold:
+        1. Apply the fold's train/val/test masks.
+        2. Z-score-standardise node features using train-split statistics.
+        3. Train a fresh :class:`GATv2Regressor` with early stopping on
+           ``SELECTION_METRIC``.
+        4. Run :data:`MC_DROPOUT_SAMPLES` stochastic forward passes to compute
+           a mean prediction and a per-node failure probability (normalised
+           variance in ``[0, 1]``).
+        5. Compute the full metric suite on the test split and build per-node
+           prediction rows.
+
+    Args:
+        base_data: PyG ``Data`` produced by :func:`gat_data.build_data`.
+        node_ids: Ordered list of node IDs aligned with ``base_data.x``.
+
+    Returns:
+        Tuple ``(all_metrics, all_predictions)``:
+
+        - ``all_metrics`` — list of per-fold metric dicts (length ``K_FOLDS``)
+          with keys from :func:`regression_metrics` plus ``fold``,
+          ``train_loss``, ``val_loss``.
+        - ``all_predictions`` — flat list of :class:`PredictionRow` covering
+          every test node across all folds.
     """
     fold_masks = build_kfold_masks(base_data.num_nodes)
     all_metrics: list[dict[str, float]] = []
@@ -140,11 +163,28 @@ def _train_model(
     val_mask: Tensor,
 ) -> dict:
     """Run the training loop with early stopping.
- 
-    Uses Huber loss weighted by sample weights.  Optionally adds a pairwise
-    ranking loss (controlled by RANKING_LOSS_WEIGHT).
- 
-    Early stopping is based on SELECTION_METRIC computed on the val split.
+
+    Loss is sample-weighted Huber on the training split; if
+    ``RANKING_LOSS_WEIGHT > 0`` a pairwise ranking hinge term is added.
+    The best model state (snapshotted at the epoch with the best validation
+    ``SELECTION_METRIC``) is restored before returning.
+
+    Args:
+        model: Untrained :class:`GATv2Regressor` instance on ``DEVICE``.
+        data: PyG ``Data`` with ``x``, ``edge_index``, ``edge_attr``, ``y``,
+            and ``sample_weights``.
+        optimizer: Pre-built optimiser bound to ``model.parameters()``.
+        train_mask: Boolean mask selecting training nodes.
+        val_mask: Boolean mask selecting validation nodes.
+
+    Returns:
+        Dict with keys ``state_dict`` (best model weights),
+        ``best_val_score`` (validation metric value at that epoch),
+        ``train_loss`` and ``val_loss`` (loss values at the best epoch).
+
+    Raises:
+        RuntimeError: If no epoch ever improved over the initial best score
+            (only happens for pathological data or zero ``NUM_EPOCHS``).
     """
     higher_is_better = SELECTION_METRIC in _HIGHER_IS_BETTER
     best_state_dict: dict | None = None
@@ -218,7 +258,19 @@ def _train_model(
 
 
 def _compute_loss(preds: Tensor, data: Data, mask: Tensor, sample_weights: Tensor) -> float:
-    """Compute the weighted Huber + optional ranking loss on a masked split."""
+    """Compute the same training loss formulation on an arbitrary node split.
+
+    Used to report a comparable validation loss value alongside the metric.
+
+    Args:
+        preds: Per-node predictions for the entire graph.
+        data: PyG ``Data`` (only ``data.y`` is read).
+        mask: Boolean mask selecting which nodes to score.
+        sample_weights: Per-node weights (matches the training-time weights).
+
+    Returns:
+        Scalar loss value (Python float).
+    """
     per_sample = F.huber_loss(preds[mask], data.y[mask], reduction="none")
     weights = sample_weights[mask]
     regression_loss = (per_sample * weights).sum() / weights.sum().clamp_min(1e-6)
@@ -239,10 +291,22 @@ def _pairwise_ranking_loss(
     margin: float,
     max_pairs: int,
 ) -> Tensor:
-    """Pairwise ranking hinge loss (matches composite pipeline).
- 
-    Encourages the model to rank higher-importance nodes above
-    lower-importance nodes by at least *margin*.
+    """Sample-weighted pairwise ranking hinge loss.
+
+    Encourages the model to rank the highest-target node above the lowest-target
+    node by at least ``margin`` in prediction space, for each of the top
+    ``max_pairs`` (high, low) pairs sorted by target.
+
+    Args:
+        predictions: Per-node predictions for the masked split.
+        targets: Per-node targets for the same masked split.
+        weights: Per-node sample weights for the same masked split.
+        margin: Minimum prediction gap required between high and low pairs.
+        max_pairs: Maximum number of (high, low) pairs to score.
+
+    Returns:
+        Scalar tensor (loss value). Returns zero if there are too few elements
+        or if no valid (high > low) pairs exist.
     """
     if predictions.numel() < 2 or max_pairs <= 0:
         return predictions.new_zeros(())
@@ -271,7 +335,21 @@ def _build_prediction_rows(
     test_mask: Tensor,
     node_ids: list[str],
 ) -> list[PredictionRow]:
-    """Build one ``PredictionRow`` per test node."""
+    """Materialise per-test-node :class:`PredictionRow` dicts.
+
+    Predictions are clamped to ``log_pred <= 88`` before ``expm1`` and then to
+    ``>= 0`` to keep the raw-scale importance non-negative.
+
+    Args:
+        predictions: Per-node predictions in ``log1p`` space (full graph).
+        labels: Per-node ground-truth labels in ``log1p`` space (full graph).
+        failure_probability: Normalised MC-Dropout variance in ``[0, 1]``.
+        test_mask: Boolean mask selecting test nodes.
+        node_ids: Ordered list of node IDs (aligned with ``predictions``).
+
+    Returns:
+        List of :class:`PredictionRow` dicts (one per test node).
+    """
     test_indices = test_mask.nonzero(as_tuple=False).view(-1).tolist()
     rows: list[PredictionRow] = []
  

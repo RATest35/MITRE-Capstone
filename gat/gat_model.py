@@ -32,8 +32,19 @@ class GATv2Regressor(nn.Module):
         drop_edge_prob: float = 0.22203374123224115,
         edge_dim: int | None = None,
     ) -> None:
-   
-    
+        """Build the three GATv2Conv layers, layer-norms, and the linear head.
+
+        Args:
+            input_channels: Number of input node features.
+            hidden_channels: Per-head hidden width inside each GATv2Conv layer.
+            num_heads: Number of attention heads per GATv2Conv layer.
+            dropout: Dropout probability applied to attention weights and after
+                each conv layer's activation.
+            drop_edge_prob: Probability of dropping each edge during training
+                (DropEdge regularisation). Set to ``0`` to disable.
+            edge_dim: Dimensionality of edge features. ``None`` disables edge
+                features entirely.
+        """
         super().__init__()
         self.dropout = dropout
         self.drop_edge_prob = drop_edge_prob
@@ -71,7 +82,19 @@ class GATv2Regressor(nn.Module):
         self.head = nn.Linear(hidden_channels, 1)
 
     def forward(self, data: Data) -> Tensor:
-     
+        """Run the forward pass and return per-node scalar predictions.
+
+        During training, applies DropEdge to ``edge_index`` (and slices
+        ``edge_attr`` accordingly). The output is the squeezed scalar
+        head (no activation), suitable for regression.
+
+        Args:
+            data: PyG ``Data`` object with ``x``, ``edge_index``, and optional
+                ``edge_attr``.
+
+        Returns:
+            ``Tensor`` of shape ``[num_nodes]`` containing one prediction per node.
+        """
         x, edge_index = data.x, data.edge_index
         edge_attr = getattr(data, "edge_attr", None)
 
