@@ -46,7 +46,16 @@ _DISPLAY_METRICS: tuple[str, ...] = (
  
  
 def main() -> None:
-    """Orchestrate data loading, training, evaluation, and output."""
+    """Run the full training pipeline end-to-end.
+
+    Steps:
+        1. Load the GraphML graph via :func:`gat_data.build_data`.
+        2. Run K-fold training + MC-Dropout inference via
+           :func:`gat_training.train_and_evaluate`.
+        3. Print a per-fold metric table and aggregated mean ± std summary.
+        4. Print the top-5 test nodes ranked by composite risk.
+        5. Write all per-node predictions to :data:`PREDICTION_CSV_PATH`.
+    """
     print(f"Device           : {DEVICE}")
     print(f"Graph            : {GRAPHML_PATH}")
     print(f"K-folds          : {K_FOLDS}")

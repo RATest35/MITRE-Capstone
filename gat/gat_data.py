@@ -1,4 +1,10 @@
-"""Data loading and preprocessing for the GATv2 pipeline."""
+"""GraphML loading, feature engineering, and CV-mask construction.
+
+This module is the bridge between the raw GraphML file and the PyTorch Geometric
+``Data`` object consumed by training. It computes node features, edge features,
+log-transformed labels, and rank-based sample weights, then splits the node set
+into K folds for cross-validation.
+"""
 
 from __future__ import annotations
 
@@ -22,17 +28,23 @@ from gat_config import (
 
 
 def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
-    """Load a GraphML file and return a PyG ``Data`` object and the ordered node IDs.
+    """Load a GraphML file and build the PyG ``Data`` object used for training.
 
-    Node features are taken from ``NODE_FEATURE_KEYS`` plus in/out degree.
+    Pipeline:
+        1. Read GraphML into a directed NetworkX graph.
+        2. Build node feature vectors from ``NODE_FEATURE_KEYS`` plus in/out degree.
+        3. Compute the importance label as ``log1p(sum(IMPORTANCE_COMPONENT_KEYS))``.
+        4. Build ``[E, EDGE_DIM]`` edge feature tensor from ``EDGE_FEATURE_KEYS``.
+        5. Compute rank-based sample weights via :func:`_build_sample_weights`.
+        6. Move all tensors to ``DEVICE``.
 
-    Edge features are built from ``EDGE_FEATURE_KEYS`` (flow, bytes_per_sec,
-    distance), giving ``EDGE_DIM = 3``.
+    Args:
+        graphml_path: Path to the input ``.graphml`` file.
 
-    Sample weights are computed from the target rank distribution to match
-    the composite pipeline's weighting scheme.
-
-    All tensors are placed on ``DEVICE``.
+    Returns:
+        Tuple ``(data, node_ids)`` where ``data`` is the PyG ``Data`` (with
+        ``x``, ``edge_index``, ``edge_attr``, ``y``, ``sample_weights``)
+        and ``node_ids`` is the list of node IDs in the same order as ``data.x``.
     """
     graph: nx.DiGraph = nx.read_graphml(graphml_path)
     node_ids: list[str] = list(graph.nodes())
@@ -70,12 +82,20 @@ def build_data(graphml_path: Path) -> tuple[Data, list[str]]:
 
 
 def build_kfold_masks(num_nodes: int) -> list[tuple[Tensor, Tensor, Tensor]]:
-    """Return a list of (train_mask, val_mask, test_mask) tuples for K-fold CV.
+    """Build K-fold cross-validation masks over a node set.
 
-    Nodes are randomly shuffled, then split into ``K_FOLDS`` roughly equal
-    partitions.  For each fold *k*, partition *k* is the test set, partition
-    *(k+1) % K* is the validation set, and the remaining partitions are the
-    training set.
+    Nodes are randomly shuffled then split into ``K_FOLDS`` partitions.
+    For fold *k*: partition *k* is the **test** set, partition *(k+1) % K*
+    is the **validation** set, and the remaining partitions form the
+    **training** set.
+
+    Args:
+        num_nodes: Total number of nodes in the graph.
+
+    Returns:
+        List of length ``K_FOLDS``, each entry a tuple of three boolean
+        masks ``(train_mask, val_mask, test_mask)`` of shape ``[num_nodes]``,
+        all placed on ``DEVICE``.
     """
     perm = torch.randperm(num_nodes)
     fold_size = num_nodes // K_FOLDS
@@ -112,7 +132,19 @@ def build_kfold_masks(num_nodes: int) -> list[tuple[Tensor, Tensor, Tensor]]:
 
 
 def standardize_features(features: Tensor, train_mask: Tensor) -> Tensor:
-    """Z-score normalise *features* using statistics computed on the training split."""
+    """Z-score normalise features using train-split-only mean and std.
+
+    Computing statistics from ``features[train_mask]`` only (not the full set)
+    prevents validation/test information from leaking into the normalisation.
+
+    Args:
+        features: Float tensor of shape ``[num_nodes, num_features]``.
+        train_mask: Boolean mask of length ``num_nodes`` selecting training nodes.
+
+    Returns:
+        Normalised tensor of the same shape and device as ``features``.
+        Std values smaller than ``1e-6`` are clamped to avoid division blow-ups.
+    """
     train_features = features[train_mask]
     mean = train_features.mean(dim=0, keepdim=True)
     std = train_features.std(dim=0, keepdim=True).clamp_min(1e-6)
