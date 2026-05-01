@@ -6,7 +6,13 @@ from torch_geometric.nn import SAGEConv
 
 
 class GraphSAGEGNN(nn.Module):
-    """GraphSAGE regressor for composite score prediction."""
+    """GraphSAGE regressor for composite score prediction.
+
+    :param input_dim: Number of input node features.
+    :param hidden_dim: Hidden representation size.
+    :param num_layers: Number of GraphSAGE message-passing layers.
+    :param dropout: Dropout probability.
+    """
 
     def __init__(
         self,
@@ -15,6 +21,14 @@ class GraphSAGEGNN(nn.Module):
         num_layers: int,
         dropout: float,
     ) -> None:
+        """Initialize the encoder, GraphSAGE layers, and head.
+
+        :param input_dim: Number of input node features.
+        :param hidden_dim: Hidden representation size.
+        :param num_layers: Number of GraphSAGE message-passing layers.
+        :param dropout: Dropout probability.
+        :return: None.
+        """
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -38,7 +52,13 @@ class GraphSAGEGNN(nn.Module):
         edge_index: torch.Tensor,
         edge_weight: torch.Tensor,
     ) -> torch.Tensor:
-        """Predict log composite score for each node."""
+        """Predict log composite score for each node.
+
+        :param x: Node feature matrix.
+        :param edge_index: Graph connectivity in COO format.
+        :param edge_weight: Edge weights accepted for interface compatibility.
+        :return: Predicted log composite score for each node.
+        """
         del edge_weight
         hidden = self.encoder(x)
         for conv, norm in zip(self.layers, self.norms):

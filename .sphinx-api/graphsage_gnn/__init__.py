@@ -1,0 +1,1 @@
+"""GraphSAGE GNN documentation package."""

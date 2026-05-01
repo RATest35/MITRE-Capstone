@@ -20,6 +20,10 @@ BASE_DIR = Path(__file__).resolve().parent
 # Parse the minimum set of CLI arguments for training.
 # ---------------------------------------------------------
 def parse_args() -> argparse.Namespace:
+    """Parse command-line options for TransformerConv training.
+
+    :return: Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--graphml-path", type=Path, default=BASE_DIR.parent / "examples" / "ip-address" / "composite_score_with_bytes_per_sec.graphml")
     parser.add_argument("--output-path", type=Path, default=Path("transformerconv-gnn/composite_score_gnn.pt"))
@@ -44,6 +48,11 @@ def parse_args() -> argparse.Namespace:
 def prepare_dataset(
     args: argparse.Namespace,
 ) -> tuple[GraphDataset, torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
+    """Load, split, and standardize the graph dataset.
+
+    :param args: Parsed training arguments.
+    :return: Dataset, feature mean, feature standard deviation, and split indices.
+    """
     raw_dataset = load_graph_dataset(
         args.graphml_path,
         sample_weight_max=args.sample_weight_max,
@@ -80,6 +89,16 @@ def build_loader(
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:
+    """Build a rooted-subgraph data loader.
+
+    :param dataset: Full graph dataset.
+    :param node_indices: Root node indices exposed by the loader.
+    :param allowed_node_indices: Node indices allowed during sampling.
+    :param sampler_config: Rooted subgraph sampling configuration.
+    :param batch_size: Number of samples per batch.
+    :param shuffle: Whether to shuffle the dataset.
+    :return: PyG data loader for rooted subgraphs.
+    """
     rooted_dataset = RootedSubgraphDataset(
         graph_dataset=dataset,
         node_indices=node_indices,
@@ -97,6 +116,13 @@ def compute_weighted_mse_loss(
     targets: torch.Tensor,
     weights: torch.Tensor,
 ) -> torch.Tensor:
+    """Compute sample-weighted mean squared error.
+
+    :param predictions: Predicted target values.
+    :param targets: Expected target values.
+    :param weights: Sample weights for each prediction.
+    :return: Weighted MSE loss.
+    """
     squared_errors = (predictions - targets).pow(2)
     weighted_errors = squared_errors * weights
     return weighted_errors.sum() / weights.sum().clamp_min(1e-12)
@@ -110,6 +136,13 @@ def compute_pairwise_ranking_loss(
     targets: torch.Tensor,
     weights: torch.Tensor,
 ) -> torch.Tensor:
+    """Compute weighted pairwise ranking loss.
+
+    :param predictions: Predicted target values.
+    :param targets: Expected target values.
+    :param weights: Sample weights for each prediction.
+    :return: Weighted pairwise ranking loss.
+    """
     target_differences = targets.unsqueeze(1) - targets.unsqueeze(0)
     pair_mask = target_differences > 0
 
@@ -132,6 +165,14 @@ def compute_batch_loss(
     weights: torch.Tensor,
     ranking_alpha: float,
 ) -> torch.Tensor:
+    """Combine regression and ranking losses.
+
+    :param predictions: Predicted target values.
+    :param targets: Expected target values.
+    :param weights: Sample weights for each prediction.
+    :param ranking_alpha: Multiplier applied to ranking loss.
+    :return: Combined batch loss.
+    """
     regression_loss = compute_weighted_mse_loss(predictions, targets, weights)
     ranking_loss = compute_pairwise_ranking_loss(predictions, targets, weights)
     return regression_loss + ranking_alpha * ranking_loss
@@ -147,6 +188,15 @@ def run_epoch(
     device: torch.device,
     ranking_alpha: float,
 ) -> float:
+    """Run one training or evaluation epoch.
+
+    :param model: TransformerConv model.
+    :param loader: Data loader for a split.
+    :param optimizer: Optimizer for training, or ``None`` for evaluation.
+    :param device: Device used for tensor computation.
+    :param ranking_alpha: Multiplier applied to ranking loss.
+    :return: Average masked loss for the epoch.
+    """
     total_loss = 0.0
     total_count = 0
     model.train() if optimizer is not None else model.eval()
@@ -185,6 +235,13 @@ def evaluate_ranking(
     loader: DataLoader,
     device: torch.device,
 ) -> dict[str, float]:
+    """Compute top-risk retrieval metrics.
+
+    :param model: TransformerConv model.
+    :param loader: Data loader for a split.
+    :param device: Device used for tensor computation.
+    :return: Precision and NDCG metrics at the top five percent.
+    """
     predictions: list[torch.Tensor] = []
     targets: list[torch.Tensor] = []
 
@@ -223,6 +280,10 @@ def evaluate_ranking(
 # Train the model, track the best validation loss, and save it.
 # ---------------------------------------------------------
 def main() -> None:
+    """Train and save the TransformerConv model.
+
+    :return: None.
+    """
     args = parse_args()
     torch.manual_seed(args.seed)
     device = torch.device(
