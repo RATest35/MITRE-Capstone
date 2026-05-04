@@ -33,9 +33,8 @@ def load_and_aggregate_data(path: Path) -> pd.DataFrame:
     Notes:
     - Converts numeric columns safely
     - Drops rows with invalid/missing values
-    - Aggregates:
-        * total flow (sum of packet lengths)
-        * bytes_per_sec (median for robustness)
+    - Aggregates total flow as the sum of packet lengths.
+    - Aggregates bytes_per_sec as the median for robustness.
     """
     df = pd.read_csv(
         path,
@@ -74,11 +73,9 @@ def build_graph(df: pd.DataFrame) -> nx.DiGraph:
     :return: Directed NetworkX graph with edge attributes.
 
     Notes:
-    - Nodes represent IP addresses
-    - Edges represent communication between IPs
-    - Edge attributes include:
-        * flow
-        * bytes_per_sec
+    - Nodes represent IP addresses.
+    - Edges represent communication between IPs.
+    - Edge attributes include flow and bytes_per_sec.
     """
     G = nx.from_pandas_edgelist(
         df,

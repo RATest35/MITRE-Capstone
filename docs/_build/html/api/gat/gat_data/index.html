@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>gat.gat_data &#8212; MITRE Capstone GNN 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="gat.gat_metrics" href="../gat_metrics/index.html" />
+    <link rel="prev" title="gat.gat_config" href="../gat_config/index.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-gat.gat_data">
+<span id="gat-gat-data"></span><h1>gat.gat_data<a class="headerlink" href="#module-gat.gat_data" title="Link to this heading">¶</a></h1>
+<p>GraphML loading, feature engineering, and CV-mask construction.</p>
+<p>This module is the bridge between the raw GraphML file and the PyTorch Geometric
+<code class="docutils literal notranslate"><span class="pre">Data</span></code> object consumed by training. It computes node features, edge features,
+log-transformed labels, and rank-based sample weights, then splits the node set
+into K folds for cross-validation.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gat.gat_data.build_data" title="gat.gat_data.build_data"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_data</span></code></a>(→ tuple[torch_geometric.data.Data, list[str]])</p></td>
+<td><p>Load a GraphML file and build the PyG <code class="docutils literal notranslate"><span class="pre">Data</span></code> object used for training.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#gat.gat_data.build_kfold_masks" title="gat.gat_data.build_kfold_masks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_kfold_masks</span></code></a>(→ list[tuple[torch.Tensor, ...)</p></td>
+<td><p>Build K-fold cross-validation masks over a node set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gat.gat_data.standardize_features" title="gat.gat_data.standardize_features"><code class="xref py py-obj docutils literal notranslate"><span class="pre">standardize_features</span></code></a>(→ torch.Tensor)</p></td>
+<td><p>Z-score normalise features using train-split-only mean and std.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="gat.gat_data.build_data">
+<span class="sig-prename descclassname"><span class="pre">gat.gat_data.</span></span><span class="sig-name descname"><span class="pre">build_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graphml_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pathlib.Path</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">torch_geometric.data.Data</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gat.gat_data.build_data" title="Link to this definition">¶</a></dt>
+<dd><p>Load a GraphML file and build the PyG <code class="docutils literal notranslate"><span class="pre">Data</span></code> object used for training.</p>
+<dl class="simple">
+<dt>Pipeline:</dt><dd><ol class="arabic simple">
+<li><p>Read GraphML into a directed NetworkX graph.</p></li>
+<li><p>Build node feature vectors from <code class="docutils literal notranslate"><span class="pre">NODE_FEATURE_KEYS</span></code> plus in/out degree.</p></li>
+<li><p>Compute the importance label as <code class="docutils literal notranslate"><span class="pre">log1p(sum(IMPORTANCE_COMPONENT_KEYS))</span></code>.</p></li>
+<li><p>Build <code class="docutils literal notranslate"><span class="pre">[E,</span> <span class="pre">EDGE_DIM]</span></code> edge feature tensor from <code class="docutils literal notranslate"><span class="pre">EDGE_FEATURE_KEYS</span></code>.</p></li>
+<li><p>Compute rank-based sample weights via <code class="xref py py-func docutils literal notranslate"><span class="pre">_build_sample_weights()</span></code>.</p></li>
+<li><p>Move all tensors to <code class="docutils literal notranslate"><span class="pre">DEVICE</span></code>.</p></li>
+</ol>
+</dd>
+<dt>Args:</dt><dd><p>graphml_path: Path to the input <code class="docutils literal notranslate"><span class="pre">.graphml</span></code> file.</p>
+</dd>
+<dt>Returns:</dt><dd><p>Tuple <code class="docutils literal notranslate"><span class="pre">(data,</span> <span class="pre">node_ids)</span></code> where <code class="docutils literal notranslate"><span class="pre">data</span></code> is the PyG <code class="docutils literal notranslate"><span class="pre">Data</span></code> (with
+<code class="docutils literal notranslate"><span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">edge_index</span></code>, <code class="docutils literal notranslate"><span class="pre">edge_attr</span></code>, <code class="docutils literal notranslate"><span class="pre">y</span></code>, <code class="docutils literal notranslate"><span class="pre">sample_weights</span></code>)
+and <code class="docutils literal notranslate"><span class="pre">node_ids</span></code> is the list of node IDs in the same order as <code class="docutils literal notranslate"><span class="pre">data.x</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gat.gat_data.build_kfold_masks">
+<span class="sig-prename descclassname"><span class="pre">gat.gat_data.</span></span><span class="sig-name descname"><span class="pre">build_kfold_masks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_nodes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gat.gat_data.build_kfold_masks" title="Link to this definition">¶</a></dt>
+<dd><p>Build K-fold cross-validation masks over a node set.</p>
+<p>Nodes are randomly shuffled then split into <code class="docutils literal notranslate"><span class="pre">K_FOLDS</span></code> partitions.
+For fold <em>k</em>: partition <em>k</em> is the <strong>test</strong> set, partition <em>(k+1) % K</em>
+is the <strong>validation</strong> set, and the remaining partitions form the
+<strong>training</strong> set.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>num_nodes: Total number of nodes in the graph.</p>
+</dd>
+<dt>Returns:</dt><dd><p>List of length <code class="docutils literal notranslate"><span class="pre">K_FOLDS</span></code>, each entry a tuple of three boolean
+masks <code class="docutils literal notranslate"><span class="pre">(train_mask,</span> <span class="pre">val_mask,</span> <span class="pre">test_mask)</span></code> of shape <code class="docutils literal notranslate"><span class="pre">[num_nodes]</span></code>,
+all placed on <code class="docutils literal notranslate"><span class="pre">DEVICE</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gat.gat_data.standardize_features">
+<span class="sig-prename descclassname"><span class="pre">gat.gat_data.</span></span><span class="sig-name descname"><span class="pre">standardize_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#gat.gat_data.standardize_features" title="Link to this definition">¶</a></dt>
+<dd><p>Z-score normalise features using train-split-only mean and std.</p>
+<p>Computing statistics from <code class="docutils literal notranslate"><span class="pre">features[train_mask]</span></code> only (not the full set)
+prevents validation/test information from leaking into the normalisation.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>features: Float tensor of shape <code class="docutils literal notranslate"><span class="pre">[num_nodes,</span> <span class="pre">num_features]</span></code>.
+train_mask: Boolean mask of length <code class="docutils literal notranslate"><span class="pre">num_nodes</span></code> selecting training nodes.</p>
+</dd>
+<dt>Returns:</dt><dd><p>Normalised tensor of the same shape and device as <code class="docutils literal notranslate"><span class="pre">features</span></code>.
+Std values smaller than <code class="docutils literal notranslate"><span class="pre">1e-6</span></code> are clamped to avoid division blow-ups.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">MITRE Capstone GNN</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="../index.html">gat</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/index.html">examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../pnaconv_gnn/index.html">pnaconv_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../graphsage_gnn/index.html">graphsage_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../transformerconv_gnn/index.html">transformerconv_gnn</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">API Reference</a><ul>
+  <li><a href="../index.html">gat</a><ul>
+      <li>Previous: <a href="../gat_config/index.html" title="previous chapter">gat.gat_config</a></li>
+      <li>Next: <a href="../gat_metrics/index.html" title="next chapter">gat.gat_metrics</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../../_sources/api/gat/gat_data/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

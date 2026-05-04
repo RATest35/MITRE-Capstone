@@ -4,6 +4,14 @@ pnaconv_gnn.train
 .. py:module:: pnaconv_gnn.train
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   pnaconv_gnn.train.BASE_DIR
+
+
 Functions
 ---------
 
@@ -20,6 +28,8 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: BASE_DIR
 
 .. py:function:: parse_args() -> argparse.Namespace
 

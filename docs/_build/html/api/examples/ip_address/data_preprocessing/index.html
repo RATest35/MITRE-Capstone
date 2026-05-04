@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>examples.ip_address.data_preprocessing &#8212; MITRE Capstone GNN 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link rel="next" title="examples.ip_address.generate_graph_model" href="../generate_graph_model/index.html" />
+    <link rel="prev" title="examples.ip_address.composite_score" href="../composite_score/index.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-examples.ip_address.data_preprocessing">
+<span id="examples-ip-address-data-preprocessing"></span><h1>examples.ip_address.data_preprocessing<a class="headerlink" href="#module-examples.ip_address.data_preprocessing" title="Link to this heading">¶</a></h1>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.data_preprocessing.INPUT_FILE" title="examples.ip_address.data_preprocessing.INPUT_FILE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">INPUT_FILE</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.data_preprocessing.OUTPUT_FILE" title="examples.ip_address.data_preprocessing.OUTPUT_FILE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OUTPUT_FILE</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.data_preprocessing.processor" title="examples.ip_address.data_preprocessing.processor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">processor</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.data_preprocessing.FlowDataPreprocessor" title="examples.ip_address.data_preprocessing.FlowDataPreprocessor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FlowDataPreprocessor</span></code></a></p></td>
+<td><p>Preprocess large network flow CSV data in chunks.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.INPUT_FILE">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.data_preprocessing.</span></span><span class="sig-name descname"><span class="pre">INPUT_FILE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#examples.ip_address.data_preprocessing.INPUT_FILE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.OUTPUT_FILE">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.data_preprocessing.</span></span><span class="sig-name descname"><span class="pre">OUTPUT_FILE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'cleaned_flows.csv'</span></span><a class="headerlink" href="#examples.ip_address.data_preprocessing.OUTPUT_FILE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.FlowDataPreprocessor">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">examples.ip_address.data_preprocessing.</span></span><span class="sig-name descname"><span class="pre">FlowDataPreprocessor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chunksize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.data_preprocessing.FlowDataPreprocessor" title="Link to this definition">¶</a></dt>
+<dd><p>Preprocess large network flow CSV data in chunks.</p>
+<p>Handles:
+- Data cleaning and validation
+- Duplicate removal across chunks
+- Aggregation into graph-ready edge format</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.FlowDataPreprocessor.chunksize">
+<span class="sig-name descname"><span class="pre">chunksize</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">200000</span></span><a class="headerlink" href="#examples.ip_address.data_preprocessing.FlowDataPreprocessor.chunksize" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.FlowDataPreprocessor.required_columns">
+<span class="sig-name descname"><span class="pre">required_columns</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['Flow.ID',</span> <span class="pre">'Source.IP',</span> <span class="pre">'Destination.IP',</span> <span class="pre">'Total.Length.of.Fwd.Packets',</span> <span class="pre">'Flow.Bytes.s']</span></span><a class="headerlink" href="#examples.ip_address.data_preprocessing.FlowDataPreprocessor.required_columns" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.FlowDataPreprocessor.clean_chunk">
+<span class="sig-name descname"><span class="pre">clean_chunk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chunk</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.DataFrame</span></span></span><a class="headerlink" href="#examples.ip_address.data_preprocessing.FlowDataPreprocessor.clean_chunk" title="Link to this definition">¶</a></dt>
+<dd><p>Clean a single chunk of flow data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>chunk</strong> – Raw chunk of CSV data.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Cleaned DataFrame with valid rows only.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.FlowDataPreprocessor.preprocess_csv">
+<span class="sig-name descname"><span class="pre">preprocess_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_csv</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_csv</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.data_preprocessing.FlowDataPreprocessor.preprocess_csv" title="Link to this definition">¶</a></dt>
+<dd><p>Clean CSV in chunks and remove duplicate Flow.ID globally.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_csv</strong> – Path to raw input CSV file.</p></li>
+<li><p><strong>output_csv</strong> – Path to save cleaned output CSV.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.FlowDataPreprocessor.combine_for_graph">
+<span class="sig-name descname"><span class="pre">combine_for_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cleaned_csv</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_csv</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.data_preprocessing.FlowDataPreprocessor.combine_for_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Aggregate cleaned flow data into graph edge format.</p>
+<p>Groups by (Source.IP, Destination.IP) to create edges.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cleaned_csv</strong> – Path to cleaned CSV file.</p></li>
+<li><p><strong>output_csv</strong> – Path to save aggregated edge CSV.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.data_preprocessing.processor">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.data_preprocessing.</span></span><span class="sig-name descname"><span class="pre">processor</span></span><a class="headerlink" href="#examples.ip_address.data_preprocessing.processor" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MITRE Capstone GNN</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../../gat/index.html">gat</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../../index.html">examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pnaconv_gnn/index.html">pnaconv_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../graphsage_gnn/index.html">graphsage_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../transformerconv_gnn/index.html">transformerconv_gnn</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">API Reference</a><ul>
+  <li><a href="../../index.html">examples</a><ul>
+  <li><a href="../index.html">examples.ip_address</a><ul>
+      <li>Previous: <a href="../composite_score/index.html" title="previous chapter">examples.ip_address.composite_score</a></li>
+      <li>Next: <a href="../generate_graph_model/index.html" title="next chapter">examples.ip_address.generate_graph_model</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../../../_sources/api/examples/ip_address/data_preprocessing/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

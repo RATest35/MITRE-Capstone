@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>examples.ip_address.composite_score &#8212; MITRE Capstone GNN 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link rel="next" title="examples.ip_address.data_preprocessing" href="../data_preprocessing/index.html" />
+    <link rel="prev" title="examples.ip_address" href="../index.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-examples.ip_address.composite_score">
+<span id="examples-ip-address-composite-score"></span><h1>examples.ip_address.composite_score<a class="headerlink" href="#module-examples.ip_address.composite_score" title="Link to this heading">¶</a></h1>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.INPUT_PATH" title="examples.ip_address.composite_score.INPUT_PATH"><code class="xref py py-obj docutils literal notranslate"><span class="pre">INPUT_PATH</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.OUTPUT_PATH" title="examples.ip_address.composite_score.OUTPUT_PATH"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OUTPUT_PATH</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.input_path" title="examples.ip_address.composite_score.input_path"><code class="xref py py-obj docutils literal notranslate"><span class="pre">input_path</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.to_float" title="examples.ip_address.composite_score.to_float"><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_float</span></code></a>(value)</p></td>
+<td><p>Convert a value to float if possible</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.load_graph" title="examples.ip_address.composite_score.load_graph"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_graph</span></code></a>(file_name)</p></td>
+<td><p>Load a GraphML file into a NetworkX graph</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.add_total_flow" title="examples.ip_address.composite_score.add_total_flow"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_total_flow</span></code></a>(G[, flow_attr])</p></td>
+<td><p>Compute total in/out flow and flow loss for each node</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.normalize_multiple_attributes" title="examples.ip_address.composite_score.normalize_multiple_attributes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">normalize_multiple_attributes</span></code></a>(G, attr_specs)</p></td>
+<td><p>Normalize multiple node attributes to specified ranges</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.add_pagerank" title="examples.ip_address.composite_score.add_pagerank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_pagerank</span></code></a>(G)</p></td>
+<td><p>Compute PageRank scores using edge weights</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.add_distance_from_strength" title="examples.ip_address.composite_score.add_distance_from_strength"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_distance_from_strength</span></code></a>(G[, strength_attr, ...])</p></td>
+<td><p>Convert edge strength to distance</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.add_weighted_betweenness" title="examples.ip_address.composite_score.add_weighted_betweenness"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_weighted_betweenness</span></code></a>(G[, strength_attr, distance_attr])</p></td>
+<td><p>Compute weighted betweenness centrality</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.add_composite_score" title="examples.ip_address.composite_score.add_composite_score"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_composite_score</span></code></a>(G)</p></td>
+<td><p>Compute composite score based on risk and importance</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.composite_score.compute_composite_score" title="examples.ip_address.composite_score.compute_composite_score"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_composite_score</span></code></a>(input_file, output_file)</p></td>
+<td><p>Run full pipeline to compute composite scores</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.INPUT_PATH">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">INPUT_PATH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'ip_graph_23511_nodes_66863_edges_seed74.graphml'</span></span><a class="headerlink" href="#examples.ip_address.composite_score.INPUT_PATH" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.OUTPUT_PATH">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">OUTPUT_PATH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'composite_score_with_bytes_per_sec.graphml'</span></span><a class="headerlink" href="#examples.ip_address.composite_score.OUTPUT_PATH" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.to_float">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">to_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.to_float" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a value to float if possible</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> – Input value to convert</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Float value or None if conversion fails</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.load_graph">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">load_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.load_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Load a GraphML file into a NetworkX graph</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>file_name</strong> – Path to the GraphML file</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Loaded NetworkX graph</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.add_total_flow">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">add_total_flow</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flow_attr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'flow'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.add_total_flow" title="Link to this definition">¶</a></dt>
+<dd><p>Compute total in/out flow and flow loss for each node</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>G</strong> – Input graph</p></li>
+<li><p><strong>flow_attr</strong> – Edge attribute representing flow</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with added node attributes (in_flow, out_flow, flow_loss)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.normalize_multiple_attributes">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">normalize_multiple_attributes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attr_specs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.normalize_multiple_attributes" title="Link to this definition">¶</a></dt>
+<dd><p>Normalize multiple node attributes to specified ranges</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>G</strong> – Input graph</p></li>
+<li><p><strong>attr_specs</strong> – List of tuples (attr_name, normalized_name, new_min, new_max)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with normalized attributes added</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.add_pagerank">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">add_pagerank</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.add_pagerank" title="Link to this definition">¶</a></dt>
+<dd><p>Compute PageRank scores using edge weights</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>G</strong> – Input graph</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with ‘pagerank’ node attribute</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.add_distance_from_strength">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">add_distance_from_strength</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strength_attr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bytes_per_sec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance_attr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'distance'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epsilon</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-09</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.add_distance_from_strength" title="Link to this definition">¶</a></dt>
+<dd><p>Convert edge strength to distance</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>G</strong> – Input graph</p></li>
+<li><p><strong>strength_attr</strong> – Edge attribute representing strength</p></li>
+<li><p><strong>distance_attr</strong> – Name of distance attribute to create</p></li>
+<li><p><strong>epsilon</strong> – Small constant to avoid division by zero</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with distance attribute added to edges</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.add_weighted_betweenness">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">add_weighted_betweenness</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strength_attr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bytes_per_sec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance_attr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'distance'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.add_weighted_betweenness" title="Link to this definition">¶</a></dt>
+<dd><p>Compute weighted betweenness centrality</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>G</strong> – Input graph</p></li>
+<li><p><strong>strength_attr</strong> – Edge attribute representing strength</p></li>
+<li><p><strong>distance_attr</strong> – Edge attribute used for distance</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with ‘weighted_betweenness’ node attribute</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.add_composite_score">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">add_composite_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.add_composite_score" title="Link to this definition">¶</a></dt>
+<dd><p>Compute composite score based on risk and importance</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>G</strong> – Input graph with normalized attributes</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with ‘importance’ and ‘composite_score’ attributes</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.compute_composite_score">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">compute_composite_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.composite_score.compute_composite_score" title="Link to this definition">¶</a></dt>
+<dd><p>Run full pipeline to compute composite scores</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_file</strong> – Path to input GraphML file</p></li>
+<li><p><strong>output_file</strong> – Path to save output GraphML file</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Processed graph with computed attributes</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.composite_score.input_path">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.composite_score.</span></span><span class="sig-name descname"><span class="pre">input_path</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'ip_graph_23511_nodes_66863_edges_seed74.graphml'</span></span><a class="headerlink" href="#examples.ip_address.composite_score.input_path" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MITRE Capstone GNN</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../../gat/index.html">gat</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../../index.html">examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pnaconv_gnn/index.html">pnaconv_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../graphsage_gnn/index.html">graphsage_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../transformerconv_gnn/index.html">transformerconv_gnn</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">API Reference</a><ul>
+  <li><a href="../../index.html">examples</a><ul>
+  <li><a href="../index.html">examples.ip_address</a><ul>
+      <li>Previous: <a href="../index.html" title="previous chapter">examples.ip_address</a></li>
+      <li>Next: <a href="../data_preprocessing/index.html" title="next chapter">examples.ip_address.data_preprocessing</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../../../_sources/api/examples/ip_address/composite_score/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

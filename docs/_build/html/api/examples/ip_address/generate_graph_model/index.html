@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>examples.ip_address.generate_graph_model &#8212; MITRE Capstone GNN 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link rel="next" title="pnaconv_gnn" href="../../../pnaconv_gnn/index.html" />
+    <link rel="prev" title="examples.ip_address.data_preprocessing" href="../data_preprocessing/index.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-examples.ip_address.generate_graph_model">
+<span id="examples-ip-address-generate-graph-model"></span><h1>examples.ip_address.generate_graph_model<a class="headerlink" href="#module-examples.ip_address.generate_graph_model" title="Link to this heading">¶</a></h1>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.DATA_PATH" title="examples.ip_address.generate_graph_model.DATA_PATH"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DATA_PATH</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.SEED" title="examples.ip_address.generate_graph_model.SEED"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SEED</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.bell_curve_probability" title="examples.ip_address.generate_graph_model.bell_curve_probability"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bell_curve_probability</span></code></a>(→ float)</p></td>
+<td><p>Generate a bounded random probability from a normal distribution.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.load_and_aggregate_data" title="examples.ip_address.generate_graph_model.load_and_aggregate_data"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_and_aggregate_data</span></code></a>(→ pandas.DataFrame)</p></td>
+<td><p>Load CSV data and aggregate flows between IP pairs.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.build_graph" title="examples.ip_address.generate_graph_model.build_graph"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_graph</span></code></a>(→ networkx.DiGraph)</p></td>
+<td><p>Construct a directed graph from aggregated flow data.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.largest_component" title="examples.ip_address.generate_graph_model.largest_component"><code class="xref py py-obj docutils literal notranslate"><span class="pre">largest_component</span></code></a>(→ networkx.DiGraph)</p></td>
+<td><p>Extract the largest weakly connected component.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.add_flow_metrics" title="examples.ip_address.generate_graph_model.add_flow_metrics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_flow_metrics</span></code></a>(→ networkx.DiGraph)</p></td>
+<td><p>Compute flow-based node metrics.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.add_random_probability" title="examples.ip_address.generate_graph_model.add_random_probability"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_random_probability</span></code></a>(→ networkx.DiGraph)</p></td>
+<td><p>Assign random probability scores to nodes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#examples.ip_address.generate_graph_model.main" title="examples.ip_address.generate_graph_model.main"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main</span></code></a>()</p></td>
+<td><p>Run full pipeline to build and export graph.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.DATA_PATH">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">DATA_PATH</span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.DATA_PATH" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.SEED">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">SEED</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">74</span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.SEED" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.bell_curve_probability">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">bell_curve_probability</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mean</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std_dev</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.04</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.bell_curve_probability" title="Link to this definition">¶</a></dt>
+<dd><p>Generate a bounded random probability from a normal distribution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mean</strong> – Mean of the Gaussian distribution.</p></li>
+<li><p><strong>std_dev</strong> – Standard deviation of the Gaussian distribution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Float probability clipped to range [0, 1].</p>
+</dd>
+</dl>
+<p>Notes:
+- Uses random.gauss for sampling
+- Values are clipped to ensure valid probability bounds</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.load_and_aggregate_data">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">load_and_aggregate_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pathlib.Path</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.DataFrame</span></span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.load_and_aggregate_data" title="Link to this definition">¶</a></dt>
+<dd><p>Load CSV data and aggregate flows between IP pairs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> – Path to cleaned CSV file.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Aggregated DataFrame with flow and bytes_per_sec columns.</p>
+</dd>
+</dl>
+<p>Notes:
+- Converts numeric columns safely
+- Drops rows with invalid/missing values
+- Aggregates total flow as the sum of packet lengths.
+- Aggregates bytes_per_sec as the median for robustness.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.build_graph">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">build_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">networkx.DiGraph</span></span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.build_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Construct a directed graph from aggregated flow data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> – DataFrame containing edge-level data.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Directed NetworkX graph with edge attributes.</p>
+</dd>
+</dl>
+<p>Notes:
+- Nodes represent IP addresses.
+- Edges represent communication between IPs.
+- Edge attributes include flow and bytes_per_sec.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.largest_component">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">largest_component</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">networkx.DiGraph</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">networkx.DiGraph</span></span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.largest_component" title="Link to this definition">¶</a></dt>
+<dd><p>Extract the largest weakly connected component.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>G</strong> – Input directed graph.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Subgraph containing the largest component.</p>
+</dd>
+</dl>
+<p>Notes:
+- Uses weak connectivity (ignores edge direction)
+- Helps remove isolated or insignificant subgraphs</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.add_flow_metrics">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">add_flow_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">networkx.DiGraph</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">networkx.DiGraph</span></span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.add_flow_metrics" title="Link to this definition">¶</a></dt>
+<dd><p>Compute flow-based node metrics.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>G</strong> – Input graph.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with node attributes:
+- in_flow
+- out_flow
+- flow_loss</p>
+</dd>
+</dl>
+<p>Notes:
+- in_flow: sum of incoming edge flow
+- out_flow: sum of outgoing edge flow
+- flow_loss: total traffic through node</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.add_random_probability">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">add_random_probability</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">G</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">networkx.DiGraph</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">networkx.DiGraph</span></span></span><a class="headerlink" href="#examples.ip_address.generate_graph_model.add_random_probability" title="Link to this definition">¶</a></dt>
+<dd><p>Assign random probability scores to nodes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>G</strong> – Input graph.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Graph with ‘random_probability’ node attribute.</p>
+</dd>
+</dl>
+<p>Notes:
+- Uses bell_curve_probability for realistic distribution
+- Simulates uncertainty or risk likelihood per node</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="examples.ip_address.generate_graph_model.main">
+<span class="sig-prename descclassname"><span class="pre">examples.ip_address.generate_graph_model.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#examples.ip_address.generate_graph_model.main" title="Link to this definition">¶</a></dt>
+<dd><p>Run full pipeline to build and export graph.</p>
+<p>Steps:
+1. Load and aggregate CSV data
+2. Build directed graph
+3. Extract largest connected component
+4. Compute node flow metrics
+5. Assign random probabilities
+6. Save graph as GraphML file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MITRE Capstone GNN</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../../gat/index.html">gat</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../../index.html">examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../pnaconv_gnn/index.html">pnaconv_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../graphsage_gnn/index.html">graphsage_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../transformerconv_gnn/index.html">transformerconv_gnn</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">API Reference</a><ul>
+  <li><a href="../../index.html">examples</a><ul>
+  <li><a href="../index.html">examples.ip_address</a><ul>
+      <li>Previous: <a href="../data_preprocessing/index.html" title="previous chapter">examples.ip_address.data_preprocessing</a></li>
+      <li>Next: <a href="../../../pnaconv_gnn/index.html" title="next chapter">pnaconv_gnn</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../../../_sources/api/examples/ip_address/generate_graph_model/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

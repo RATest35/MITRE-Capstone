@@ -10,6 +10,7 @@ Attributes
 .. autoapisummary::
 
    transformerconv_gnn.train.DEFAULT_LAYER_DIMS
+   transformerconv_gnn.train.BASE_DIR
 
 
 Functions
@@ -34,6 +35,8 @@ Module Contents
 .. py:data:: DEFAULT_LAYER_DIMS
    :value: [128, 96, 64, 32]
 
+
+.. py:data:: BASE_DIR
 
 .. py:function:: parse_args() -> argparse.Namespace
 

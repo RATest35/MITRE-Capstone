@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>gat.gat_metrics &#8212; MITRE Capstone GNN 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="gat.gat_model" href="../gat_model/index.html" />
+    <link rel="prev" title="gat.gat_data" href="../gat_data/index.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-gat.gat_metrics">
+<span id="gat-gat-metrics"></span><h1>gat.gat_metrics<a class="headerlink" href="#module-gat.gat_metrics" title="Link to this heading">¶</a></h1>
+<p>Evaluation metrics for the GATv2 pipeline.</p>
+<p>Provides the metric suite used by both the training loop and the Optuna
+hyperparameter search:</p>
+<ul class="simple">
+<li><p>Regression: <code class="docutils literal notranslate"><span class="pre">mae</span></code>, <code class="docutils literal notranslate"><span class="pre">rmse</span></code>, <code class="docutils literal notranslate"><span class="pre">log_mae</span></code>, <code class="docutils literal notranslate"><span class="pre">log_rmse</span></code></p></li>
+<li><p>Correlation: <code class="docutils literal notranslate"><span class="pre">pearson</span></code>, <code class="docutils literal notranslate"><span class="pre">spearman</span></code></p></li>
+<li><p>Ranking: <code class="docutils literal notranslate"><span class="pre">top_1pct_recall</span></code>, <code class="docutils literal notranslate"><span class="pre">top_5pct_recall</span></code>, <code class="docutils literal notranslate"><span class="pre">ndcg_1pct</span></code>, <code class="docutils literal notranslate"><span class="pre">ndcg_5pct</span></code></p></li>
+</ul>
+<p>All metrics expect inputs in <strong>log-space</strong> (<code class="docutils literal notranslate"><span class="pre">log1p</span></code>-transformed values);
+<a class="reference internal" href="#gat.gat_metrics.regression_metrics" title="gat.gat_metrics.regression_metrics"><code class="xref py py-func docutils literal notranslate"><span class="pre">regression_metrics()</span></code></a> applies <code class="docutils literal notranslate"><span class="pre">expm1</span></code> internally for the raw-scale metrics.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gat.gat_metrics.regression_metrics" title="gat.gat_metrics.regression_metrics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">regression_metrics</span></code></a>(→ dict[str, float])</p></td>
+<td><p>Compute the full regression + ranking metric suite.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#gat.gat_metrics.top_k_recall" title="gat.gat_metrics.top_k_recall"><code class="xref py py-obj docutils literal notranslate"><span class="pre">top_k_recall</span></code></a>(→ float)</p></td>
+<td><p>Fraction of the true top-k nodes that appear in the predicted top-k.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gat.gat_metrics.ndcg_at_ratio" title="gat.gat_metrics.ndcg_at_ratio"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ndcg_at_ratio</span></code></a>(→ float)</p></td>
+<td><p>Normalised Discounted Cumulative Gain at a given top-k ratio.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="gat.gat_metrics.regression_metrics">
+<span class="sig-prename descclassname"><span class="pre">gat.gat_metrics.</span></span><span class="sig-name descname"><span class="pre">regression_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">actual_log</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicted_log</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gat.gat_metrics.regression_metrics" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the full regression + ranking metric suite.</p>
+<p>Predicted values are clipped to <code class="docutils literal notranslate"><span class="pre">log_pred</span> <span class="pre">&lt;=</span> <span class="pre">88</span></code> before <code class="docutils literal notranslate"><span class="pre">expm1</span></code> to
+avoid floating-point overflow on extreme outputs.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>actual_log: Ground-truth importance scores in <code class="docutils literal notranslate"><span class="pre">log1p</span></code> space.
+predicted_log: Model-predicted importance scores in <code class="docutils literal notranslate"><span class="pre">log1p</span></code> space.</p>
+</dd>
+<dt>Returns:</dt><dd><p>Dict mapping metric name → float value, with keys
+<code class="docutils literal notranslate"><span class="pre">mae</span></code>, <code class="docutils literal notranslate"><span class="pre">rmse</span></code>, <code class="docutils literal notranslate"><span class="pre">log_mae</span></code>, <code class="docutils literal notranslate"><span class="pre">log_rmse</span></code>, <code class="docutils literal notranslate"><span class="pre">pearson</span></code>,
+<code class="docutils literal notranslate"><span class="pre">spearman</span></code>, <code class="docutils literal notranslate"><span class="pre">top_1pct_recall</span></code>, <code class="docutils literal notranslate"><span class="pre">top_5pct_recall</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ndcg_1pct</span></code>, <code class="docutils literal notranslate"><span class="pre">ndcg_5pct</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gat.gat_metrics.top_k_recall">
+<span class="sig-prename descclassname"><span class="pre">gat.gat_metrics.</span></span><span class="sig-name descname"><span class="pre">top_k_recall</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">actual</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicted</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ratio</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#gat.gat_metrics.top_k_recall" title="Link to this definition">¶</a></dt>
+<dd><p>Fraction of the true top-k nodes that appear in the predicted top-k.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>actual: Ground-truth scores (any monotonic-with-importance scale).
+predicted: Predicted scores in the same ordering convention as <code class="docutils literal notranslate"><span class="pre">actual</span></code>.
+ratio: Top-k as a fraction of the population (e.g. <code class="docutils literal notranslate"><span class="pre">0.05</span></code> for top 5%).</p>
+</dd>
+<dt>Returns:</dt><dd><p>Recall in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>. <code class="docutils literal notranslate"><span class="pre">1.0</span></code> means perfect identification of critical
+nodes; <code class="docutils literal notranslate"><span class="pre">0.0</span></code> means none of the predicted top-k are truly critical.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gat.gat_metrics.ndcg_at_ratio">
+<span class="sig-prename descclassname"><span class="pre">gat.gat_metrics.</span></span><span class="sig-name descname"><span class="pre">ndcg_at_ratio</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">actual</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicted</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ratio</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#gat.gat_metrics.ndcg_at_ratio" title="Link to this definition">¶</a></dt>
+<dd><p>Normalised Discounted Cumulative Gain at a given top-k ratio.</p>
+<p>Uses raw target values as relevance scores. Unlike <a class="reference internal" href="#gat.gat_metrics.top_k_recall" title="gat.gat_metrics.top_k_recall"><code class="xref py py-func docutils literal notranslate"><span class="pre">top_k_recall()</span></code></a>
+this also rewards correctly ordering the top-k nodes (not just selecting them).</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>actual: Ground-truth scores used as relevance values.
+predicted: Predicted scores used to define the candidate ranking.
+ratio: Top-k as a fraction of the population.</p>
+</dd>
+<dt>Returns:</dt><dd><p>NDCG in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>. <code class="docutils literal notranslate"><span class="pre">1.0</span></code> means the predicted top-k ranking
+perfectly matches the ideal top-k ranking.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">MITRE Capstone GNN</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="../index.html">gat</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/index.html">examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../pnaconv_gnn/index.html">pnaconv_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../graphsage_gnn/index.html">graphsage_gnn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../transformerconv_gnn/index.html">transformerconv_gnn</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">API Reference</a><ul>
+  <li><a href="../index.html">gat</a><ul>
+      <li>Previous: <a href="../gat_data/index.html" title="previous chapter">gat.gat_data</a></li>
+      <li>Next: <a href="../gat_model/index.html" title="next chapter">gat.gat_model</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../../_sources/api/gat/gat_metrics/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

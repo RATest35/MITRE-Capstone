@@ -4,6 +4,14 @@ graphsage_gnn.train
 .. py:module:: graphsage_gnn.train
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   graphsage_gnn.train.BASE_DIR
+
+
 Functions
 ---------
 
@@ -19,6 +27,8 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: BASE_DIR
 
 .. py:function:: parse_args() -> argparse.Namespace
 

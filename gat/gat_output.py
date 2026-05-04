@@ -10,14 +10,11 @@ from typing import TypedDict
 class PredictionRow(TypedDict):
     """One row in the predictions CSV.
 
-    Attributes:
-        node_id: IP address (graph node identifier).
-        actual_importance: Ground-truth importance score (raw scale, not log1p).
-        predicted_importance: Model-predicted importance score (raw scale).
-        failure_probability: Normalised MC-Dropout variance in ``[0, 1]``;
-            higher means the model is less certain about this node.
-        composite_risk: ``actual_importance * failure_probability`` —
-            ranking metric used to surface the most critical nodes.
+    - node_id: IP address graph node identifier.
+    - actual_importance: Ground-truth importance score on the raw scale.
+    - predicted_importance: Model-predicted importance score on the raw scale.
+    - failure_probability: Normalised MC-Dropout variance in ``[0, 1]``.
+    - composite_risk: ``actual_importance * failure_probability`` ranking metric.
     """
 
     node_id: str
